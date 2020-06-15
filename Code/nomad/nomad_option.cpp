@@ -1,28 +1,28 @@
 #include "nomad_option.h"
 
 #include <vector>
+#include <algorithm>
 #include <numeric>
 #include <iostream>
 
 #include <boost/program_options.hpp>
-#include <boost/format.hpp>
 
 using namespace std;
 
 namespace nomad {
 
-	NomadOption::NomadOption(const char* program_name) :
-		option_desc_((boost::format("%s options") % program_name).str().c_str())
+	NomadOption::NomadOption(const string& program_name) :
+		option_desc_((program_name + " options").c_str())
 	{
 		using boost::program_options::value;
 
 		option_desc_.add_options()
 			("help,h", "produce help message")
-			("nthreads", value<int>(&num_threads_)->default_value(4),
+			("nthreads,n", value<int>(&num_threads_)->default_value(4),
 				"number of threads to use (0: automatic)")
 			("lrate,l", value<double>(&learn_rate_)->default_value(0.001),
 				"learning rate")
-			("drate,d", value<double>(&decay_rate_)->default_value(0.1),
+			("drate,d", value<double>(&decay_rate_)->default_value(0.1, "0.1"),
 				"decay rate")
 			("reg,r", value<double>(&par_lambda_)->default_value(1.0),
 				"regularization parameter lambda")
@@ -41,15 +41,15 @@ namespace nomad {
 				"number of column reuse")
 			("r0delay", value<double>(&rank0_delay_)->default_value(0),
 				"arbitrary network delay added to communication of rank 0 machine")
-			("path", value<string>(&path_), "path of data")
-			("output", value<string>(&output_path_)->default_value(""),
+			("path,i", value<string>(&path_), "path of data")
+			("output,o", value<string>(&output_path_)->default_value(""),
 				"path of the file the result will be printed into")
 
 			("jobid,j", value<int>(&job_id_)->default_value(1),
 				"numberic ID of current job, used to distinguish different job's internal files.")
 			("cptype,c", value<string>(&cp_type_)->default_value("none"),
 				"type of checkpoint (none, sync, async, vs)")
-			("cpinterval,i", value<double>(&cp_interval_)->default_value(-1.0),
+			("cpinterval", value<double>(&cp_interval_)->default_value(-1.0),
 				"interval of checkpoint (negative value disable checkpoint, by default)")
 			("cppath", value<string>(&cp_path_)->default_value(""),
 				"path to store checkpoint")
@@ -71,31 +71,42 @@ namespace nomad {
 		return true;
 	}
 
-	bool NomadOption::parse_ratio()
+	void NomadOption::to_lower(string& s)
 	{
-		string s = net_ratio_str;
 		for(size_t i = 0; i < s.size(); ++i) {
 			if(s[i] >= 'A' && s[i] <= 'Z')
 				s[i] += 'a' - 'A';
 		}
+	}
+
+	bool NomadOption::check_ctype()
+	{
+		to_lower(cp_type_);
+		static vector<string> valid = { "none","sync","async","vs" };
+		return find(valid.begin(), valid.end(), cp_type_) != valid.end();
+	}
+
+	bool NomadOption::parse_ratio()
+	{
+		to_lower(net_ratio_str);
 		bool flag = true;
 		size_t scale = 1;
-		if(s.size() < 2){
+		if(net_ratio_str.size() < 2){
 			flag = false;
-		} else if(s == "inf"){
+		} else if(net_ratio_str == "inf"){
 			net_ratio = numeric_limits<double>::infinity();
 		} else{
-			if(s.back() == 'k' || s.back() == 'm' || s.back() == 'g'){
-				if(s.back() == 'k')
+			if(net_ratio_str.back() == 'k' || net_ratio_str.back() == 'm' || net_ratio_str.back() == 'g'){
+				if(net_ratio_str.back() == 'k')
 					scale = 1000;
-				else if(s.back() == 'm')
+				else if(net_ratio_str.back() == 'm')
 					scale = 1000 * 1000;
 				else
 					scale = 1000 * 1000 * 1000;
-				s = s.substr(0, s.size() - 1);
+				net_ratio_str = net_ratio_str.substr(0, net_ratio_str.size() - 1);
 			}
 			try{
-				net_ratio = stod(s);
+				net_ratio = stod(net_ratio_str);
 			} catch(...){
 				flag = false;
 			}
@@ -124,6 +135,9 @@ namespace nomad {
 				flag_help = true;
 			}
 			if(!parse_ratio()) {
+				flag_help = true;
+			}
+			if(!check_ctype()){
 				flag_help = true;
 			}
 

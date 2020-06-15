@@ -1,66 +1,32 @@
-/*
- * Copyright (c) 2013 Hyokun Yun
- *
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *  http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- *
- */
-#ifndef NOMAD_REALDATA_BODY_HPP_
-#define NOMAD_REALDATA_BODY_HPP_
-
-#include "nomad.hpp"
+#include "nomad_body.h"
 
 #include <iostream>
 #include <vector>
 #include <fstream>
 #include <numeric>
 
-#include "nomad_option.h"
-#include "nomad_body2.hpp"
 
-using std::cout;
-using std::cerr;
-using std::endl;
+using namespace std;
 
-using std::string;
-using std::vector;
-using std::ifstream;
-using std::ios;
-
-bool read_data(const string filename, int part_index, int num_parts,
-		int &min_row_index,
-		int &local_num_rows,
-		vector<int, sallocator<int> > &col_offset,
-		vector<int, sallocator<int> > &row_idx,
-		vector<scalar, sallocator<scalar> > &row_val
-		)
+static bool read_data(const string filename, int part_index, int num_parts,
+	bool show_info,
+	int& min_row_index,
+	int& local_num_rows,
+	vector<int, sallocator<int> >& col_offset,
+	vector<int, sallocator<int> >& row_idx,
+	vector<scalar, sallocator<scalar> >& row_val,
+	int& nrows, int& ncols, long long total_nnz
+)
 {
 
 	ifstream data_file(filename, ios::in | ios::binary);
 
 	int file_id;
-	int nrows;
-	int ncols;
-	long long total_nnz;
 
 	// read the ID of the file to figure out whether it is normal file format
 	// or long file format
 	if(!data_file.read(reinterpret_cast<char*>(&file_id), sizeof(int))){
-		cout << "Error in reading ID from file" << endl;
+		cerr << "Error in reading ID from file" << endl;
 		return false;
 	}
 
@@ -69,7 +35,7 @@ bool read_data(const string filename, int part_index, int num_parts,
 		int header[3];
 
 		if(!data_file.read(reinterpret_cast<char*>(header), 3 * sizeof(int))){
-			cout << "Error in reading header from file" << endl;
+			cerr << "Error in reading header from file" << endl;
 			return false;
 		}
 
@@ -82,7 +48,7 @@ bool read_data(const string filename, int part_index, int num_parts,
 		int header[2];
 
 		if(!data_file.read(reinterpret_cast<char*>(header), 2 * sizeof(int))){
-			cout << "Error in reading header from file" << endl;
+			cerr << "Error in reading header from file" << endl;
 			return false;
 		}
 
@@ -90,13 +56,12 @@ bool read_data(const string filename, int part_index, int num_parts,
 		ncols = header[1];
 
 		if(!data_file.read(reinterpret_cast<char*>(&total_nnz), sizeof(long long))){
-			cout << "Error in reading nnz from file" << endl;
+			cerr << "Error in reading nnz from file" << endl;
 			return false;
 		}
 
-	}
-	else{
-		cout << file_id << " does not identify a valid binary matrix file!" << endl;
+	} else{
+		cerr << file_id << " does not identify a valid binary matrix file!" << endl;
 		exit(1);
 	}
 
@@ -115,7 +80,7 @@ bool read_data(const string filename, int part_index, int num_parts,
 
 	int* total_nnz_rows = sallocator<int>().allocate(nrows);
 	if(!data_file.read(reinterpret_cast<char*>(total_nnz_rows), nrows * sizeof(int))){
-		cout << "Error in reading nnz values from file!" << endl;
+		cerr << "Error in reading nnz values from file!" << endl;
 		return false;
 	}
 
@@ -126,11 +91,13 @@ bool read_data(const string filename, int part_index, int num_parts,
 	long long end_skip = total_nnz - nnz - begin_skip;
 
 	// BUGBUG: this is just for debugging purpose
+	/*
 	if(part_index == 3){
 		cout << "nrows: " << nrows << ", ncols: " << ncols << ", total_nnz: " << total_nnz << endl;
 		cout << "min_row: " << min_row << ", max_row: " << max_row << endl;
 		cout << "begin_skip: " << begin_skip << ", nnz: " << nnz << endl;
 	}
+	*/
 
 	// Skip over the begin_nnz number of column indices in the file
 	data_file.seekg(begin_skip * sizeof(int), std::ios_base::cur);
@@ -139,7 +106,7 @@ bool read_data(const string filename, int part_index, int num_parts,
 
 	int* col_idx = sallocator<int>().allocate(nnz);
 	if(!data_file.read(reinterpret_cast<char*>(col_idx), nnz * sizeof(int))){
-		cout << "Error in reading column indices from file!" << endl;
+		cerr << "Error in reading column indices from file!" << endl;
 		return false;
 	}
 
@@ -150,7 +117,7 @@ bool read_data(const string filename, int part_index, int num_parts,
 
 	double* col_val = sallocator<double>().allocate(nnz);
 	if(!data_file.read(reinterpret_cast<char*>(col_val), nnz * sizeof(double))){
-		cout << "Error in reading matrix values from file" << endl;
+		cerr << "Error in reading matrix values from file" << endl;
 		exit(1);
 	}
 
@@ -210,94 +177,59 @@ bool read_data(const string filename, int part_index, int num_parts,
 
 }
 
-namespace nomad {
+// -------- NomadBody --------
 
-using std::ifstream;
+int NomadBody::get_num_cols(const std::string& path){
 
-struct RealDataOption: public NomadOption{
+	const string train_filename = path + "/train.dat";
 
-	RealDataOption() :
-			NomadOption("nomad")
+	// read number of columns from the data file
+	int global_num_cols;
 	{
-	}
+		ifstream data_file(train_filename, ios::in | ios::binary);
+		int header[4];
 
-protected:
-
-	virtual int get_num_cols(){
-
-		const string train_filename = path_ + "/train.dat";
-
-		// read number of columns from the data file
-		int global_num_cols;
-		{
-			ifstream data_file(train_filename, ios::in | ios::binary);
-			int header[4];
-
-			if(!data_file.read(reinterpret_cast<char*>(header), 4 * sizeof(int))){
-				cout << "Error in reading ID from file" << endl;
-				exit(11);
-			}
-
-			global_num_cols = header[2];
-
-			data_file.close();
+		if(!data_file.read(reinterpret_cast<char*>(header), 4 * sizeof(int))){
+			cerr << "Error in reading ID from file" << endl;
+			exit(11);
 		}
 
-		return global_num_cols;
+		global_num_cols = header[2];
 
+		data_file.close();
 	}
 
-};
+	return global_num_cols;
 
 }
 
-using nomad::NomadOption;
-using nomad::RealDataOption;
 
-class RealDataBody: public NomadBody{
+bool NomadBody::load_train(const std::string& path,
+	int part_index, int num_parts, bool show_info,
+	Data& d
+){
 
-public:
-	virtual NomadOption *create_option(){
-		return new nomad::RealDataOption();
-	}
+	const string train_filename = path + "/train.dat";
+	return read_data(train_filename, part_index, num_parts,
+		show_info,
+		d.min_row_index,
+		d.local_num_rows,
+		d.col_offset, d.row_idx, d.row_val,
+		d.num_rows, d.num_cols, d.num_nonzero);
 
-protected:
-	virtual bool load_train(NomadOption& option,
-			int part_index, int num_parts,
-			int &min_row_index,
-			int &local_num_rows,
-			vector<int, sallocator<int> > &col_offset,
-			vector<int, sallocator<int> > &row_idx,
-			vector<scalar, sallocator<scalar> > &row_val
-			){
+}
 
-		RealDataOption& real_option = dynamic_cast<RealDataOption &>(option);
-		const string train_filename = real_option.path_ + "/train.dat";
-		return read_data(train_filename, part_index, num_parts,
-				min_row_index,
-				local_num_rows,
-				col_offset, row_idx, row_val);
+bool NomadBody::load_test(const std::string& path,
+	int part_index, int num_parts, bool show_info,
+	Data& d
+){
 
-	}
+	const string test_filename = path + "/test.dat";
+	return read_data(test_filename, part_index, num_parts,
+		show_info,
+		d.min_row_index,
+		d.local_num_rows,
+		d.col_offset, d.row_idx, d.row_val,
+		d.num_rows, d.num_cols, d.num_nonzero);
 
-	virtual bool load_test(NomadOption& option,
-			int part_index, int num_parts,
-			int &min_row_index,
-			int &local_num_rows,
-			vector<int, sallocator<int> > &col_offset,
-			vector<int, sallocator<int> > &row_idx,
-			vector<scalar, sallocator<scalar> > &row_val
-			){
-
-		RealDataOption& real_option = dynamic_cast<RealDataOption &>(option);
-		const string test_filename = real_option.path_ + "/test.dat";
-		return read_data(test_filename, part_index, num_parts,
-				min_row_index,
-				local_num_rows,
-				col_offset, row_idx, row_val);
-
-	}
-
-};
-
-#endif
+}

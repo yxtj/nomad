@@ -31,13 +31,13 @@ message(STATUS "TBB_LIBRARIES: ${TBB_LIBRARIES}")
 
 if (${CMAKE_CXX_COMPILER_ID} STREQUAL MSVC)
 	message(STATUS "MSVC")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D TBB_USE_DEBUG=0")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTBB_USE_DEBUG=0 -DTBB_IMPLEMENT_CPP0X=1")
 	#add_definitions(-DTBB_USE_THREADING_TOOLS)
 	#add_definitions(-DTBB_USE_DEBUG=0)
 else ()
 	message(STATUS "Complier: ${CMAKE_CXX_COMPILER_ID}")
 	#set(CMAKE_CXX_FLAGS_DEBUG "-Wall -fsigned-char -D TBB_USE_THREADING_TOOLS")
-	set(CMAKE_CXX_FLAGS_DEBUG "-Wall -fsigned-char -DTBB_USE_DEBUG=0")
+	set(CMAKE_CXX_FLAGS_DEBUG "-Wall -fsigned-char -DTBB_USE_DEBUG=0 -DTBB_IMPLEMENT_CPP0X=1")
 	set(CMAKE_CXX_FLAGS_RELEASE "-Wall -fsigned-char")
 endif ()
 
@@ -51,7 +51,11 @@ message(STATUS "Boost_LIBRARIES: ${Boost_LIBRARIES}")
 
 #add_executable(nomad_float nomad_float.cpp)
 #add_executable(nomad_double nomad_double.cpp nomad_body.hpp nomad_option.cpp)
-add_executable(nomad_double2 nomad_double2.cpp nomad_body2.hpp nomad_option.cpp)
+add_executable(nomad
+	main.cpp
+	nomad_option.cpp
+	nb_data.cpp nb_init.cpp nb_main.cpp nb_sendrecv.cpp nb_net_control.cpp nb_checkpoint.cpp
+)
 
 add_executable(synthgen synthgen.cpp)
 add_executable(synthgen_conf synthgen-conf.cpp)

@@ -62,15 +62,18 @@ namespace nomad {
 		double net_ratio;
 		string net_ratio_str;
 
-		NomadOption(const char* program_name);
-
-		virtual int get_num_cols() = 0;
+		NomadOption(const string& program_name);
+		bool parse_command(int& argc, char**& argv);
 
 		bool is_option_OK();
 
+	private:
+		void to_lower(string& s);
+
+		bool check_ctype();
+
 		bool parse_ratio();
 
-		bool parse_command(int& argc, char**& argv);
 
 	};
 
