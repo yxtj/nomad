@@ -35,7 +35,7 @@ struct NomadOption {
 	unsigned long long seed_;
 	int latent_dimension_;
 	std::vector<double> timeouts_;
-	int pipeline_token_num_;
+	//int pipeline_token_num_;
 	int num_reuse_;
 	bool flag_pause_;
 	double rank0_delay_;
@@ -53,8 +53,6 @@ struct NomadOption {
 	std::string net_ratio_str;
 
 	bool parse_command(int& argc, char**& argv);
-
-	bool is_option_OK();
 
 private:
 	void to_lower(std::string& s);

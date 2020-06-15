@@ -6,8 +6,7 @@ int main(int argc, char **argv) {
 
 	//RealDataBody body;
 	NomadOption option;
-	option.parse_command(argc, argv);
-	if(!option.is_option_OK()){
+	if(!option.parse_command(argc, argv)){
 		return 1;
 	}
 	NomadBody body;

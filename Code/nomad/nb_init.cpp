@@ -96,7 +96,7 @@ void NomadBody::initial_cp(){
 	received_flush.resize(option->num_threads_, vector<bool>(num_parts, false));
 	count_recv_flush.resize(option->num_threads_, 0);
 	cp_fmsgs.resize(option->num_threads_);
-	//		cp_state.resize(option->num_threads_, CheckpointState(num_parts));
+	//cp_state.resize(option->num_threads_, CheckpointState(num_parts));
 	msg_archived.resize(option->num_threads_, 0);
 	cp_write_time.resize(option->num_threads_, 0.0);
 }

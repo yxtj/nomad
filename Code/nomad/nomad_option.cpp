@@ -9,19 +9,6 @@
 
 using namespace std;
 
-bool NomadOption::is_option_OK()
-{
-	if(path_.length() <= 0){
-		cerr << "input path has to be specified." << endl;
-		return false;
-	}
-	if(!check_ctype()){
-		cerr << "checkpoint type is not valid." << endl;
-		return false;
-	}
-	return true;
-}
-
 void NomadOption::to_lower(std::string& s)
 {
 	for(size_t i = 0; i < s.size(); ++i) {
@@ -87,14 +74,14 @@ bool NomadOption::parse_command(int& argc, char**& argv) {
 		("timeout,t",
 			value<vector<double> >(&timeouts_)->multitoken()->default_value(vector<double>(1, 10.0), "10.0"),
 			"timeout seconds until completion")
-		("ptoken,p", value<int>(&pipeline_token_num_)->default_value(1024),
-			"number of tokens in the pipeline")
+		//("ptoken,p", value<int>(&pipeline_token_num_)->default_value(1024),
+		//	"number of tokens in the pipeline")
 		("dim", value<int>(&latent_dimension_)->default_value(100),
 			"dimension of latent space")
 		("reuse", value<int>(&num_reuse_)->default_value(1),
 			"number of column reuse")
 		("pause", value<bool>(&flag_pause_)->default_value(true),
-			"number of column reuse")
+			"pause for a while after each timeout")
 		("r0delay", value<double>(&rank0_delay_)->default_value(0),
 			"arbitrary network delay added to communication of rank 0 machine")
 		("path,i", value<string>(&path_), "path of data")
@@ -105,9 +92,9 @@ bool NomadOption::parse_command(int& argc, char**& argv) {
 			"numberic ID of current job, used to distinguish different job's internal files.")
 		("cptype,c", value<string>(&cp_type_)->default_value("none"),
 			"type of checkpoint (none, sync, async, vs)")
-		("cpinterval", value<double>(&cp_interval_)->default_value(-1.0),
-			"interval of checkpoint (negative value disable checkpoint, by default)")
-		("cppath", value<string>(&cp_path_)->default_value(""),
+		("cpinterval", value<double>(&cp_interval_)->default_value(0.0),
+			"interval of checkpoint")
+		("cppath,p", value<string>(&cp_path_)->default_value(""),
 			"path to store checkpoint")
 
 		("net-delay", value<double>(&net_delay)->default_value(0),
@@ -129,9 +116,19 @@ bool NomadOption::parse_command(int& argc, char**& argv) {
 			flag_help = true;
 		}
 		if(!parse_ratio()) {
+			cerr << "net-ratio is invalid." << endl;
+			flag_help = true;
+		}
+		if(path_.length() <= 0){
+			cerr << "input path has to be specified." << endl;
 			flag_help = true;
 		}
 		if(!check_ctype()){
+			cerr << "checkpoint type is inalid." << endl;
+			flag_help = true;
+		}
+		if(cp_type_ != "none" && cp_interval_ <= 0){
+			cerr << "checkpoint interval is invalid." << endl;
 			flag_help = true;
 		}
 
@@ -143,7 +140,7 @@ bool NomadOption::parse_command(int& argc, char**& argv) {
 		flag_help = true;
 	}
 
-	if(true == flag_help || false == is_option_OK()) {
+	if(true == flag_help) {
 		cerr << option_desc_ << endl;
 		return false;
 	}
