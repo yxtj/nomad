@@ -73,6 +73,7 @@ CMakeSettings.json
 test/
 conf/
 bin/
+Result/
 build/
 *.log
 
