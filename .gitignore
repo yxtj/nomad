@@ -60,7 +60,7 @@ log-*/
 
 # vs and vs-code project config file
 .vs/
-.vscode/s
+.vscode/
 *.code-workspace
 CMakeSettings.json
 .cmake/
