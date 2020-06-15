@@ -6,6 +6,8 @@ project(nomad CXX)
 set(NOMAD_MAJOR 1)
 set(NOMAD_MINOR 0)
 
+set(CMAKE_CXX_STANDARD 11)
+
 # find mpi
 find_package(MPI REQUIRED)
 
@@ -14,13 +16,7 @@ set(CMAKE_CXX_COMPILE_FLAGS ${CMAKE_CXX_COMPILE_FLAGS} ${MPI_COMPILE_FLAGS})
 set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} ${MPI_LINK_FLAGS}")
 include_directories(${MPI_INCLUDE_PATH})
 link_libraries(${MPI_LIBRARIES})
-
-set(CMAKE_CXX_FLAGS_DEBUG "-std=c++11 -g -Wall -fsigned-char -D TBB_USE_THREADING_TOOLS")
-set(CMAKE_CXX_FLAGS_RELEASE "-std=c++11 -O3 -Wall -fsigned-char")
-
-set(CMAKE_BUILD_TYPE Release)
-# set(CMAKE_BUILD_TYPE Debug)
-
+message(STATUS "MPI_LIBRARIES: ${MPI_LIBRARIES}")
 
 # Locate TBB
 
@@ -29,17 +25,34 @@ set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/CMake/FindTBB/")
 
 find_package(TBB REQUIRED)
-
 include_directories(${TBB_INCLUDE_DIRS})
 link_libraries(${TBB_LIBRARIES})
+message(STATUS "TBB_LIBRARIES: ${TBB_LIBRARIES}")
+
+if (${CMAKE_CXX_COMPILER_ID} STREQUAL MSVC)
+	message(STATUS "MSVC")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D TBB_USE_DEBUG=0")
+	#add_definitions(-DTBB_USE_THREADING_TOOLS)
+	#add_definitions(-DTBB_USE_DEBUG=0)
+else ()
+	message(STATUS "Complier: ${CMAKE_CXX_COMPILER_ID}")
+	#set(CMAKE_CXX_FLAGS_DEBUG "-Wall -fsigned-char -D TBB_USE_THREADING_TOOLS")
+	set(CMAKE_CXX_FLAGS_DEBUG "-Wall -fsigned-char -DTBB_USE_DEBUG=0")
+	set(CMAKE_CXX_FLAGS_RELEASE "-Wall -fsigned-char")
+endif ()
+
 
 # Locate Boost
-find_package(Boost 1.49 COMPONENTS program_options REQUIRED )
+find_package(Boost REQUIRED COMPONENTS filesystem system program_options)
 include_directories( ${Boost_INCLUDE_DIR} )
 link_libraries(${Boost_LIBRARIES} )
+message(STATUS "Boost_LIBRARIES: ${Boost_LIBRARIES}")
 
 
 #add_executable(nomad_float nomad_float.cpp)
-add_executable(nomad_double nomad_double.cpp)
-#add_executable(synthgen synthgen.cpp)
+#add_executable(nomad_double nomad_double.cpp nomad_body.hpp nomad_option.cpp)
+add_executable(nomad_double2 nomad_double2.cpp nomad_body2.hpp nomad_option.cpp)
+
+add_executable(synthgen synthgen.cpp)
+add_executable(synthgen_conf synthgen-conf.cpp)
 #add_executable(permute permute.cpp)

@@ -27,9 +27,10 @@
 #include <iostream>
 #include <vector>
 #include <fstream>
+#include <numeric>
 
 #include "nomad_option.h"
-#include "nomad_body.hpp"
+#include "nomad_body2.hpp"
 
 using std::cout;
 using std::cerr;
@@ -41,12 +42,12 @@ using std::ifstream;
 using std::ios;
 
 bool read_data(const string filename, int part_index, int num_parts,
-	int& min_row_index,
-	int& local_num_rows,
-	vector<int, sallocator<int> >& col_offset,
-	vector<int, sallocator<int> >& row_idx,
-	vector<scalar, sallocator<scalar> >& row_val
-)
+		int &min_row_index,
+		int &local_num_rows,
+		vector<int, sallocator<int> > &col_offset,
+		vector<int, sallocator<int> > &row_idx,
+		vector<scalar, sallocator<scalar> > &row_val
+		)
 {
 
 	ifstream data_file(filename, ios::in | ios::binary);
@@ -93,7 +94,8 @@ bool read_data(const string filename, int part_index, int num_parts,
 			return false;
 		}
 
-	} else{
+	}
+	else{
 		cout << file_id << " does not identify a valid binary matrix file!" << endl;
 		exit(1);
 	}
@@ -210,102 +212,89 @@ bool read_data(const string filename, int part_index, int num_parts,
 
 namespace nomad {
 
-	using std::ifstream;
+using std::ifstream;
 
-	struct RealDataOption : public NomadOption{
+struct RealDataOption: public NomadOption{
 
-		string path_ = "";
-
-		RealDataOption() :
+	RealDataOption() :
 			NomadOption("nomad")
+	{
+	}
+
+protected:
+
+	virtual int get_num_cols(){
+
+		const string train_filename = path_ + "/train.dat";
+
+		// read number of columns from the data file
+		int global_num_cols;
 		{
-			option_desc_.add_options()
-				("path", boost::program_options::value<string>(&path_), "path of data")
-				;
-		}
+			ifstream data_file(train_filename, ios::in | ios::binary);
+			int header[4];
 
-		virtual bool is_option_OK(){
-			if(path_.length() <= 0){
-				cerr << "--path has to be specified." << endl;
-				return false;
-			}
-			return NomadOption::is_option_OK();
-		}
-
-	protected:
-
-		virtual int get_num_cols(){
-
-			const string train_filename = path_ + "/train.dat";
-
-			// read number of columns from the data file
-			int global_num_cols;
-			{
-				ifstream data_file(train_filename, ios::in | ios::binary);
-				int header[4];
-
-				if(!data_file.read(reinterpret_cast<char*>(header), 4 * sizeof(int))){
-					cout << "Error in reading ID from file" << endl;
-					exit(11);
-				}
-
-				global_num_cols = header[2];
-
-				data_file.close();
+			if(!data_file.read(reinterpret_cast<char*>(header), 4 * sizeof(int))){
+				cout << "Error in reading ID from file" << endl;
+				exit(11);
 			}
 
-			return global_num_cols;
+			global_num_cols = header[2];
 
+			data_file.close();
 		}
 
-	};
+		return global_num_cols;
+
+	}
+
+};
 
 }
 
 using nomad::NomadOption;
 using nomad::RealDataOption;
 
-class RealDataBody : public NomadBody{
+class RealDataBody: public NomadBody{
 
 public:
-	virtual NomadOption* create_option(){
+	virtual NomadOption *create_option(){
 		return new nomad::RealDataOption();
 	}
 
 protected:
 	virtual bool load_train(NomadOption& option,
-		int part_index, int num_parts,
-		int& min_row_index,
-		int& local_num_rows,
-		vector<int, sallocator<int> >& col_offset,
-		vector<int, sallocator<int> >& row_idx,
-		vector<scalar, sallocator<scalar> >& row_val
-	){
+			int part_index, int num_parts,
+			int &min_row_index,
+			int &local_num_rows,
+			vector<int, sallocator<int> > &col_offset,
+			vector<int, sallocator<int> > &row_idx,
+			vector<scalar, sallocator<scalar> > &row_val
+			){
 
-		RealDataOption& real_option = dynamic_cast<RealDataOption&>(option);
+		RealDataOption& real_option = dynamic_cast<RealDataOption &>(option);
 		const string train_filename = real_option.path_ + "/train.dat";
 		return read_data(train_filename, part_index, num_parts,
-			min_row_index,
-			local_num_rows,
-			col_offset, row_idx, row_val);
+				min_row_index,
+				local_num_rows,
+				col_offset, row_idx, row_val);
 
 	}
 
 	virtual bool load_test(NomadOption& option,
-		int part_index, int num_parts,
-		int& min_row_index,
-		int& local_num_rows,
-		vector<int, sallocator<int> >& col_offset,
-		vector<int, sallocator<int> >& row_idx,
-		vector<scalar, sallocator<scalar> >& row_val
-	){
+			int part_index, int num_parts,
+			int &min_row_index,
+			int &local_num_rows,
+			vector<int, sallocator<int> > &col_offset,
+			vector<int, sallocator<int> > &row_idx,
+			vector<scalar, sallocator<scalar> > &row_val
+			){
 
-		RealDataOption& real_option = dynamic_cast<RealDataOption&>(option);
+		RealDataOption& real_option = dynamic_cast<RealDataOption &>(option);
 		const string test_filename = real_option.path_ + "/test.dat";
 		return read_data(test_filename, part_index, num_parts,
-			min_row_index,
-			local_num_rows,
-			col_offset, row_idx, row_val);
+				min_row_index,
+				local_num_rows,
+				col_offset, row_idx, row_val);
 
 	}
 

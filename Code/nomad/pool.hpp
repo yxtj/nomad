@@ -25,89 +25,109 @@
 
 #include "nomad.hpp"
 #include "tbb/tbb.h"
+#include <algorithm>
 
-namespace nomad { 
+namespace nomad {
 
-  struct ColumnData {
+struct ColumnData{
 
-  public:
-    int col_index_;
-    long flag_;
-    int *perm_;
-    int pos_;
-    scalar *values_;
+public:
+	int col_index_; // its negative value is re-used as special signals
+	long flag_;
+	int source_; //set by receiver as MPI rank
+	int *perm_;
+	int pos_; // used as second parameter
+	scalar *values_;
 
-  };
-
-  class Pool {
-
-  public:
-    Pool(int dim, int num_threads, int init_size) : 
-    queue_(),
-    dim_(dim),
-    num_threads_(num_threads),
-    alloc_(),
-    int_alloc_(),
-    scalar_alloc_()
-    {
-      
-    }
-
-    ~Pool() {
-
-      while (true) {
-
-	ColumnData *p_col=nullptr;
-	bool succeed = queue_.try_pop(p_col);
-	if (succeed) {	 
-	  int_alloc_.deallocate(p_col->perm_, num_threads_);
-	  scalar_alloc_.deallocate(p_col->values_, dim_);
-	  alloc_.destroy(p_col);
-	  alloc_.deallocate(p_col, 1);
-	}		
-	else {
-	  break;
+	char* serialize(char* cur_pos, const int dim){
+		*(reinterpret_cast<int *>(cur_pos)) = col_index_;
+		*(reinterpret_cast<long *>(cur_pos + sizeof(int))) = flag_;
+		scalar *dest = reinterpret_cast<scalar *>(cur_pos + sizeof(long) + sizeof(int));
+		std::copy(values_, values_ + dim, dest);
+		return cur_pos;
 	}
 
-      }
+	void deserialize(char* cur_pos, const int dim){
+		col_index_ = *(reinterpret_cast<int *>(cur_pos));
+		flag_ = *(reinterpret_cast<long *>(cur_pos + sizeof(int)));
+		scalar *dest = reinterpret_cast<scalar *>(cur_pos + sizeof(int)+ sizeof(long));
+		std::copy(dest, dest + dim, values_);
+	}
 
-    }
+	void set_perm(const int nthreads, rng_type& rng){
+		pos_=0;
+		for(int i = 0; i < nthreads; i++){
+			perm_[i] = i;
+		}
+		std::shuffle(perm_, perm_ + nthreads, rng);
+	}
 
-    ColumnData *allocate() {
+};
 
-      ColumnData *ret = alloc_.allocate(1);
-      ret->perm_ = int_alloc_.allocate(num_threads_);
-      ret->values_ = scalar_alloc_.allocate(dim_);
-      return ret;
+class Pool{
 
-    }
+public:
+	Pool(int dim, int num_threads, int init_size) :
+			queue_(),dim_(dim),num_threads_(num_threads),alloc_(),
+			int_alloc_(),scalar_alloc_()
+	{
+	}
 
-    void push(ColumnData *p_col) {
-      queue_.push(p_col);
-    }
+	~Pool(){
 
-    ColumnData *pop() {
-      
-      ColumnData *ret=nullptr;
-      bool succeed = queue_.try_pop(ret);
-      
-      if (succeed) {
-	return ret;
-      }
-      else {
-	return allocate();
-      }
+		while(true){
 
-    }
+			ColumnData *p_col = nullptr;
+			bool succeed = queue_.try_pop(p_col);
+			if(succeed){
+				int_alloc_.deallocate(p_col->perm_, num_threads_);
+				scalar_alloc_.deallocate(p_col->values_, dim_);
+				alloc_.destroy(p_col);
+				alloc_.deallocate(p_col, 1);
+			}
+			else{
+				break;
+			}
 
-  private:
-    tbb::concurrent_queue<ColumnData *, callocator<ColumnData *> > queue_;
-    int dim_;
-    int num_threads_;
-    callocator< ColumnData > alloc_;
-    callocator< int > int_alloc_;
-    callocator< scalar > scalar_alloc_;
-  };
+		}
+
+	}
+
+	ColumnData *allocate(){
+
+		ColumnData *ret = alloc_.allocate(1);
+		ret->perm_ = int_alloc_.allocate(num_threads_);
+		ret->values_ = scalar_alloc_.allocate(dim_);
+		return ret;
+
+	}
+
+	void push(ColumnData *p_col){
+		queue_.push(p_col);
+	}
+
+	ColumnData *pop(){
+
+		ColumnData *ret = nullptr;
+		bool succeed = queue_.try_pop(ret);
+
+		if(succeed){
+			return ret;
+		}
+		else{
+			return allocate();
+		}
+
+	}
+
+private:
+	tbb::concurrent_queue<ColumnData *, callocator<ColumnData *> > queue_;
+	int dim_;
+	int num_threads_;
+	callocator<ColumnData> alloc_;
+	callocator<int> int_alloc_;
+	callocator<scalar> scalar_alloc_;
+};
 
 }
 

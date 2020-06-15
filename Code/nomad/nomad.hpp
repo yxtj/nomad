@@ -44,6 +44,8 @@ using callocator = tbb::cache_aligned_allocator<T>;
 
 using real=double;
 
+using scalar = double;
+
 // void SYByteSwapInt(int *buff,int n)
 // {
 //   int  i,j,tmp;
