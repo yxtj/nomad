@@ -6,7 +6,7 @@ Information of the original version:
 
 * NOMAD: Non-locking, stOchastic Multi-machine algorithm for Asynchronous and Decentralized matrix completion. NOMAD is a package for large-scale distributed matrix completion. Please refer to the paper [1] for detailed discussion on the algorithm.
 * The original readme file is renamed as "README-old.md". The code is put into the branch named "version-of-Yun".
-  * In order to compile the original code in modern compiler, you need to replace all `tbb::tick_count::interval_t` with `std::chrono::duration<double>` in the "nomad_body.hpp" file.
+  * In order to compile the original code in modern compiler, you need to remove the line `#include <tbb/compat/thread> ` and replace all `tbb::tick_count::interval_t` with `std::chrono::duration<double>` in the "nomad_body.hpp" file.
 
 * NOMAD is under Apache License ver 2.0; see LICENSE file for detailed information.
 
