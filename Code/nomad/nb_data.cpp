@@ -65,9 +65,7 @@ static bool read_data(const string filename, int part_index, int num_parts,
 		exit(1);
 	}
 
-	if(part_index == 0){
-		cout << "nrows: " << nrows << ", ncols: " << ncols << ", total_nnz: " << total_nnz << endl;
-	}
+	//cout << "nrows: " << nrows << ", ncols: " << ncols << ", total_nnz: " << total_nnz << endl;
 
 	// calculate how many number of rows is to be stored locally
 	const int num_rows_per_part = nrows / num_parts + ((nrows % num_parts > 0) ? 1 : 0);
@@ -91,18 +89,17 @@ static bool read_data(const string filename, int part_index, int num_parts,
 	long long end_skip = total_nnz - nnz - begin_skip;
 
 	// BUGBUG: this is just for debugging purpose
-	/*
-	if(part_index == 3){
-		cout << "nrows: " << nrows << ", ncols: " << ncols << ", total_nnz: " << total_nnz << endl;
-		cout << "min_row: " << min_row << ", max_row: " << max_row << endl;
-		cout << "begin_skip: " << begin_skip << ", nnz: " << nnz << endl;
+	
+	if(show_info){
+		cout << "nrows: " << nrows << ", ncols: " << ncols << ", total_nnz: " << total_nnz << "\n"
+			<< "min_row: " << min_row << ", max_row: " << max_row << "\n"
+			<< "begin_skip: " << begin_skip << ", nnz: " << nnz << endl;
 	}
-	*/
 
 	// Skip over the begin_nnz number of column indices in the file
 	data_file.seekg(begin_skip * sizeof(int), std::ios_base::cur);
 
-	cout << "read column indices" << endl;
+	//cout << "read column indices" << endl;
 
 	int* col_idx = sallocator<int>().allocate(nnz);
 	if(!data_file.read(reinterpret_cast<char*>(col_idx), nnz * sizeof(int))){
@@ -113,7 +110,7 @@ static bool read_data(const string filename, int part_index, int num_parts,
 	// Skip over remaining nnz and the beginning of data as well
 	data_file.seekg(end_skip * sizeof(int) + begin_skip * sizeof(double), std::ios_base::cur);
 
-	cout << "read values" << endl;
+	//cout << "read values" << endl;
 
 	double* col_val = sallocator<double>().allocate(nnz);
 	if(!data_file.read(reinterpret_cast<char*>(col_val), nnz * sizeof(double))){
@@ -124,7 +121,7 @@ static bool read_data(const string filename, int part_index, int num_parts,
 	data_file.close();
 
 	// Now convert everything to column major format
-	cout << "form column-wise data structure" << endl;
+	//cout << "form column-wise data structure" << endl;
 
 	// First create vector of vectors
 	vector<vector<int>, sallocator<int> > row_idx_vec(ncols);
@@ -149,7 +146,7 @@ static bool read_data(const string filename, int part_index, int num_parts,
 	sallocator<double>().deallocate(col_val, nnz);
 	sallocator<int>().deallocate(total_nnz_rows, nrows);
 
-	cout << "form CSC" << endl;
+	//cout << "form CSC" << endl;
 
 	// Now convert everything into CSC format
 	// vector<int, sallocator<int> > col_offset(ncols+1);

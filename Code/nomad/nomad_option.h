@@ -22,61 +22,48 @@
 #ifndef NOMAD_NOMAD_OPTION_HPP_
 #define NOMAD_NOMAD_OPTION_HPP_
 
-//#include "nomad.hpp"
-
-//#include <random>
 #include <vector>
-//#include <numeric>
+#include <string>
 
-#include <boost/program_options.hpp>
+ //#include <boost/program_options.hpp>
 
-namespace nomad {
+struct NomadOption {
+	int num_threads_;
+	double learn_rate_;
+	double decay_rate_;
+	double par_lambda_;
+	unsigned long long seed_;
+	int latent_dimension_;
+	std::vector<double> timeouts_;
+	int pipeline_token_num_;
+	int num_reuse_;
+	bool flag_pause_;
+	double rank0_delay_;
 
-	using std::vector;
-	using std::string;
+	std::string path_;
+	std::string output_path_;
 
-	struct NomadOption {
+	int job_id_;
+	std::string cp_type_;
+	double cp_interval_;
+	std::string cp_path_;
 
-		boost::program_options::options_description option_desc_;
-		int num_threads_;
-		double learn_rate_;
-		double decay_rate_;
-		double par_lambda_;
-		unsigned long long seed_;
-		int latent_dimension_;
-		vector<double> timeouts_;
-		int pipeline_token_num_;
-		int num_reuse_;
-		bool flag_pause_;
-		double rank0_delay_;
+	double net_delay;
+	double net_ratio;
+	std::string net_ratio_str;
 
-		string path_;
-		string output_path_;
+	bool parse_command(int& argc, char**& argv);
 
-		int job_id_;
-		string cp_type_;
-		double cp_interval_;
-		string cp_path_;
+	bool is_option_OK();
 
-		double net_delay;
-		double net_ratio;
-		string net_ratio_str;
+private:
+	void to_lower(std::string& s);
 
-		NomadOption(const string& program_name);
-		bool parse_command(int& argc, char**& argv);
+	bool check_ctype();
 
-		bool is_option_OK();
-
-	private:
-		void to_lower(string& s);
-
-		bool check_ctype();
-
-		bool parse_ratio();
+	bool parse_ratio();
 
 
-	};
-
-}
+};
 
 #endif

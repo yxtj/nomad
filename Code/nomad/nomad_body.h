@@ -77,7 +77,7 @@ private:
 	int hostname_len;
 	char hostname[MPI_MAX_PROCESSOR_NAME];
 
-	nomad::NomadOption* option;
+	NomadOption* option;
 
 	int num_parts;
 	int global_num_cols;
@@ -170,14 +170,13 @@ private:
 	// private functions:
 private:
 	bool initial_mpi();
-	bool initial_option(int argc, char** argv);
 	int get_num_cols(const std::string& path);
 	void initial_data4thread();
 	void initial_data4machine();
 	void initial_net_data();
 	void initial_cp();
 	void initial_net_control();
-	bool initial(int argc, char** argv);
+	bool initial(NomadOption* opt);
 
 	void do_net_control_delay();
 	void do_net_control_ratio(size_t nbyte, tbb::tick_count::interval_t time);
@@ -229,7 +228,7 @@ private:
 	void restore(int epoch, int thread_index, double* latent_rows, int& local_num_rows, int& dim);
 
 public:
-	int run(int argc, char** argv);
+	int run(NomadOption* opt);
 
 };
 

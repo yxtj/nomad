@@ -9,7 +9,6 @@
 
 using namespace std;
 
-namespace nomad{
 
 void CheckpointState::start(const std::string& cp_path, const int epoch_, const int part_index){
 	checkpointing=true;
@@ -21,6 +20,4 @@ void CheckpointState::start(const std::string& cp_path, const int epoch_, const 
 	fmsg=ofstream(folder+ std::to_string(part_index)+".msg", ofstream::binary);
 }
 
-
-} //namespace nomad
 

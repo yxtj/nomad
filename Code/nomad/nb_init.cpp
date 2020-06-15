@@ -38,11 +38,6 @@ bool NomadBody::initial_mpi(){
 	return true;
 }
 
-bool NomadBody::initial_option(int argc, char** argv){
-	option = new nomad::NomadOption("nomad");
-	return option->parse_command(argc, argv);
-}
-
 void NomadBody::initial_data4thread(){
 	// maintain the number of updates for each thread
 	num_updates = callocator<atomic<long long> >().allocate(option->num_threads_);
@@ -114,8 +109,9 @@ void NomadBody::initial_net_control(){
 	control_net_ratio = option->net_delay != std::numeric_limits<double>::max();
 	net_ratio = option->net_ratio;
 }
-bool NomadBody::initial(int argc, char** argv){
-	if(!initial_option(argc, argv) || !initial_mpi())
+bool NomadBody::initial(NomadOption* opt){
+	option = opt;
+	if(!initial_mpi())
 		return false;
 	log_header = "W" + to_string(rank) + ": ";
 	cout << log_header << boost::format("processor name: %s, number of tasks: %d, rank: %d") % hostname % numtasks % rank << endl;

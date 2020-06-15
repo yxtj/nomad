@@ -12,7 +12,6 @@
 #include <fstream>
 #include <string>
 
-namespace nomad{
 
 struct CheckpointState{
 	bool checkpointing=false;
@@ -40,7 +39,5 @@ public:
 	void archive_state(const char* data, const int len);
 
 };
-
-} // namespace nomad
 
 #endif /* CHECKPOINTSTATE_H_ */

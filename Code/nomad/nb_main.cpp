@@ -30,9 +30,9 @@ using nomad::ColumnData;
 using nomad::MsgType;
 
 
-int NomadBody::run(int argc, char** argv){
+int NomadBody::run(NomadOption* opt){
 
-	if(!initial(argc, argv)){
+	if(!initial(opt)){
 		return 1;
 	}
 
