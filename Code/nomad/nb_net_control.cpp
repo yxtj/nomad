@@ -5,7 +5,7 @@
 using namespace std;
 
 void NomadBody::do_net_control_delay(){
-	if(control_net_delay > 0){
+	if(control_net_delay){
 		std::this_thread::sleep_for(net_delay);
 	}
 }
