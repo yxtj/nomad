@@ -1,0 +1,78 @@
+# CMake related files
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+#Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+*.dir
+
+# Visual C++ cache files
+ipch/
+*.aps
+*.ncb
+*.opendb
+*.opensdf
+*.sdf
+*.cachefile
+*.VC.db
+
+# -----------
+# vs project file
+*.vcproj
+*.vcxproj
+*.ffilters
+
+# linux temporary files
+*.gch
+*.o
+*.so
+*.a
+*.out
+
+# mac temporary files
+.DS_Store
+
+# clang-format
+.clang-format
+_clang-format
+
+# config files for PyCharm
+.idea
+
+# python temporary files
+__pycache__
+*.pyc
+
+# other helper folders
+tmp/
+temp/
+log/
+log-*/
+
+# eclipse project files:
+.cproject
+.project
+.settings/
+
+# vs and vs-code project config file
+.vs/
+.vscode/s
+*.code-workspace
+CMakeSettings.json
+.cmake/
+
+# temporary files:
+*~
+
+# project specific ignore files:
+[dD]ata*/
+test/
+conf/
+bin/
+build/
+*.log
+
