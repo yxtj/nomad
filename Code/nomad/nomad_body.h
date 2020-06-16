@@ -140,11 +140,12 @@ private:
 	// data for checkpoint
 	// THE MAIN WORK FOR CHECKPOINT IS DONE IN updater_func() FOR MINIMIZEING THE MODIFICATION
 	bool finished;
+	atomic<int> cp_thread_wait_counter;
 	vector<bool, callocator<bool> > checkpointing;
+	atomic<int>* cp_received_clear_counters;
 	vector<int, callocator<int> > count_recv_flush;
 	vector<vector<bool>, callocator<vector<bool> > > received_flush;
-	vector<int, callocator<int> > cp_epoch;
-	//	vector<CheckpointState, callocator<CheckpointState> > cp_state;
+	int cp_epoch;
 	string cp_folder;
 
 	vector<long long, callocator<long long> > msg_archived;
@@ -154,8 +155,7 @@ private:
 	int cp_master_epoch;
 	std::mutex cp_m;
 	std::condition_variable cp_cv;
-	const int cp_signal_start = -1; //initialized once and used multiple times
-	const int cp_signal_flush = -2; //initialized once and used multiple times
+	atomic<int> cp_master_lfinish_count;
 	vector<std::ofstream*> cp_fmsgs;
 
 	// network control
@@ -166,6 +166,9 @@ private:
 
 	// others
 	string log_header;
+	atomic<bool> allow_sending;
+	atomic<bool> allow_processing;
+	atomic<bool>* allow_processing_thread;
 
 	// private functions:
 private:
@@ -185,6 +188,7 @@ private:
 	// Define Master Thread
 	/////////////////////////////////////////////////////////
 	void master_func();
+	void cp_sh_m_lfinish(int source_part);
 
 	/////////////////////////////////////////////////////////
 	// Define Updater Thread
@@ -215,17 +219,43 @@ private:
 	/////////////////////////////////////////////////////////
 	// Define Checkpoint functions
 	/////////////////////////////////////////////////////////
-	void signal_handler_start(int thread_index, ColumnData* p_col, double* latent_rows, int local_num_rows, int dim);
-	void signal_handler_flush(int thread_index, ColumnData* p_col);
+	void _send_clear_signal(int thread_index, bool send2self, bool direct_send);
+	void _send_lfinish_signal();
+	string gen_cp_file_name(int part_index);
 
 	bool start_cp(int thread_index, int epoch);
-	void archive_local(int thread_index, double* latent_rows, int local_num_rows, int dim);
+	void archive_local(int thread_index, double* latent_rows, int local_num_rows);
 	void archive_msg(int thread_index, ColumnData* p_col);
+	void archive_msg_queue(int thread_index, const string& suffix, colque& queue, bool locked = true);
+	void archive_msg_queue_all(bool locked = true);
 	void finish_cp(int thread_index);
 
-	void restore_local(const string& cp_folder, int part_index, double* latent_rows, int& local_num_rows, int& dim);
-	void restore_msg(const string& cp_folder, int part_index);
+	void restore_local(const string& cp_f, int part_index, double* latent_rows, int& local_num_rows, int& dim);
+	void restore_msg_queue(const string& cp_f, colque& queue);
 	void restore(int epoch, int thread_index, double* latent_rows, int& local_num_rows, int& dim);
+
+	void _send_sig2threads_start(int epoch);
+	void _send_sig2threads_clear(int source); // source rank
+	void _send_sig2threads_resume(int epoch);
+
+	// signal handler - machine (MPI instance) level
+	void cp_shm_start(int epoch);
+	void cp_shm_clear(int source); // source rank
+	void cp_shm_resume(int epoch);
+
+	// signal handler - thread level
+	void cp_sht_start(int thread_index, int part_index, int epoch, double* latent_rows, int local_num_rows);
+	void cp_sht_clear(int thread_index, int part_index, int source, double* latent_rows, int local_num_rows);
+	void cp_sht_resume(int thread_index, int part_index, int epoch);
+
+	void signal_handler_start(int thread_index, ColumnData* p_col, double* latent_rows, int local_num_rows);
+	void signal_handler_clear(int thread_index, ColumnData* p_col);
+	void signal_handler_resume(int thread_index, ColumnData* p_col);
+
+	// SYNC checkpoint functions
+	void cp_sht_start_sync(int thread_index, ColumnData* p_col, double* latent_rows, int local_num_rows);
+	void cp_sht_clear_sync(int thread_index, ColumnData* p_col);
+	void cp_sht_resume_sync(int thread_index, ColumnData* p_col);
 
 public:
 	int run(NomadOption* opt);

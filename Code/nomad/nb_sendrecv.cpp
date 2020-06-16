@@ -59,8 +59,9 @@ void NomadBody::train_send_func(const double timeout){
 
 		ColumnData* p_col = nullptr;
 
-		if(send_queue.try_pop(p_col)){
-			if(p_col->col_index_ == cp_signal_flush){
+		if(allow_sending && send_queue.try_pop(p_col)){
+			// CP related
+			if(p_col->col_index_ == ColumnData::SIGNAL_CP_CLEAR){
 				//flush out out-message
 				if(cur_num != 0){
 					int target_rank = target_dist(send_rng);
@@ -70,12 +71,12 @@ void NomadBody::train_send_func(const double timeout){
 					cur_pos = send_message + sizeof(int) + sizeof(int);
 					cur_num = 0;
 				}
-				//send flush signal
+				//send clear signal
 				*reinterpret_cast<int*>(send_message) = p_col->pos_;	//set source part_index
 				for(int target_rank = 0; target_rank < numtasks; ++target_rank){
 					if(target_rank == rank)
 						continue;
-					int rc = MPI_Ssend(send_message, sizeof(int), MPI_CHAR, target_rank, MsgType::CP_FLUSH, MPI_COMM_WORLD);
+					int rc = MPI_Ssend(send_message, sizeof(int), MPI_CHAR, target_rank, MsgType::CP_CLEAR, MPI_COMM_WORLD);
 					if(rc != MPI_SUCCESS){
 						std::cerr << "SendTask MPI Error" << std::endl;
 						exit(64);
@@ -208,23 +209,17 @@ void NomadBody::train_recv_func(){
 				}
 			}
 		} else if(status.MPI_TAG == MsgType::CP_START){
-			//push cp-start-signal to all threads
-			for(int i = 0; i < option->num_threads_; ++i){
-				ColumnData* p_col = column_pool->pop();
-				p_col->col_index_ = cp_signal_start;
-				//					p_col->source_=status.MPI_SOURCE;
-				p_col->pos_ = *reinterpret_cast<int*>(recv_message);//epoch
-				job_queues[i].push(p_col);
-			}
-		} else if(status.MPI_TAG == MsgType::CP_FLUSH){
-			//push cp-flush-signal to all threads
-			for(int i = 0; i < option->num_threads_; ++i){
-				ColumnData* p_col = column_pool->pop();
-				p_col->col_index_ = cp_signal_flush;
-				p_col->pos_ = *reinterpret_cast<int*>(recv_message);//source
-//					p_col->source_=status.MPI_SOURCE;
-				job_queues[i].push(p_col);
-			}
+			int epoch = *reinterpret_cast<int*>(recv_message);
+			cp_shm_start(epoch);
+		} else if(status.MPI_TAG == MsgType::CP_CLEAR){
+			int source = *reinterpret_cast<int*>(recv_message);
+			cp_shm_clear(source);
+		} else if(status.MPI_TAG == MsgType::CP_RESUME){
+			int epoch = *reinterpret_cast<int*>(recv_message);
+			cp_shm_resume(epoch);
+		} else if(status.MPI_TAG == MsgType::CP_LFINISH){ // for master
+			int epoch = *reinterpret_cast<int*>(recv_message);
+			cp_sh_m_lfinish(epoch);
 		}
 	}
 	sallocator<char>().deallocate(recv_message, msg_bytenum);
@@ -262,16 +257,9 @@ void NomadBody::test_send_func(){
 		ColumnData* p_col;
 
 		if(send_queue.try_pop(p_col)){
-
 			// if the column was not already processed
 			if((p_col->flag_ & mask) == 0){
-
 				p_col->flag_ |= mask;
-
-				//					*(reinterpret_cast<int *>(cur_pos)) = p_col->col_index_;
-				//					*(reinterpret_cast<long *>(cur_pos + sizeof(int))) = p_col->flag_;
-				//					double *dest = reinterpret_cast<double *>(cur_pos + sizeof(long) + sizeof(int));
-				//					std::copy(p_col->values_, p_col->values_ + dim, dest);
 				p_col->serialize(cur_pos, dim);
 
 				cur_pos += unit_bytenum;
@@ -299,19 +287,14 @@ void NomadBody::test_send_func(){
 			} else{
 				cout << log_header << "!!! should not happen! flag:" << p_col->flag_ << "???" << endl;
 			}
-
 			column_pool->push(p_col);
 
 		} else{
-
 			// even if pop was failed, if there is remaining message send it to another machine
 			if(cur_num > 0){
-
 				*(reinterpret_cast<int*>(send_message)) = cur_num;
-
 				// choose destination
 				int rc = MPI_Ssend(send_message, msg_bytenum, MPI_CHAR, target_rank, MsgType::DATA, MPI_COMM_WORLD);
-
 				if(rc != MPI_SUCCESS){
 					std::cerr << "SendTask MPI Error" << std::endl;
 					exit(64);
@@ -319,7 +302,6 @@ void NomadBody::test_send_func(){
 
 				cur_pos = send_message + sizeof(int);
 				cur_num = 0;
-
 			} else{
 				std::this_thread::yield();
 			}

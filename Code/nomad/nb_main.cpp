@@ -30,6 +30,28 @@ using nomad::ColumnData;
 using nomad::MsgType;
 
 
+/////////////////////////////////////////////////////////
+// Define message sending function
+/////////////////////////////////////////////////////////
+void NomadBody::_send_msg(char* send_message, const int cur_num, const int target_rank){
+	*(reinterpret_cast<int*>(send_message)) = static_cast<int>(send_queue.unsafe_size());
+	*(reinterpret_cast<int*>(send_message) + 1) = cur_num;
+	//tbb::tick_count t = tbb::tick_count::now();
+	int rc = MPI_Ssend(send_message, msg_bytenum, MPI_CHAR, target_rank, MsgType::DATA, MPI_COMM_WORLD);
+	if(rc != MPI_SUCCESS){
+		std::cerr << "SendTask MPI Error" << std::endl;
+		exit(64);
+	}
+
+	//do_net_control_ratio(msg_bytenum, tbb::tick_count::now() - t);
+
+	local_send_count += cur_num;
+}
+
+
+/////////////////////////////////////////////////////////
+// Define main running function
+/////////////////////////////////////////////////////////
 int NomadBody::run(NomadOption* opt){
 
 	if(!initial(opt)){
@@ -391,26 +413,6 @@ int NomadBody::run(NomadOption* opt){
 
 }
 
-
-/////////////////////////////////////////////////////////
-// Define message sending function
-/////////////////////////////////////////////////////////
-void NomadBody::_send_msg(char* send_message, const int cur_num, const int target_rank){
-	*(reinterpret_cast<int*>(send_message)) = send_queue.unsafe_size();
-	*(reinterpret_cast<int*>(send_message) + 1) = cur_num;
-	//tbb::tick_count t = tbb::tick_count::now();
-	int rc = MPI_Ssend(send_message, msg_bytenum, MPI_CHAR, target_rank, MsgType::DATA, MPI_COMM_WORLD);
-	if(rc != MPI_SUCCESS){
-		std::cerr << "SendTask MPI Error" << std::endl;
-		exit(64);
-	}
-
-	//do_net_control_ratio(msg_bytenum, tbb::tick_count::now() - t);
-
-	local_send_count += cur_num;
-}
-
-
 /////////////////////////////////////////////////////////
 // Define Updater Thread
 /////////////////////////////////////////////////////////
@@ -455,14 +457,14 @@ void NomadBody::updater_func(int thread_index){
 	}
 
 	/////////////////////////////////////////////////////////
-	// Initialize Data Structure
+	// Initialize Latent Data Structure
 	/////////////////////////////////////////////////////////
 
 	// now assign parameters for rows
 	double* latent_rows = sallocator<double>().allocate(local_num_rows * option->latent_dimension_);
 
 	// initialize random number generator
-	rng_type rng(option->seed_ + rank * 131 + thread_index + 1);
+	mt19937_64 rng(option->seed_ + rank * 131 + thread_index + 1);
 	std::uniform_real_distribution<double> init_dist(0, 1.0 / sqrt(option->latent_dimension_));
 	for(int i = 0; i < local_num_rows * option->latent_dimension_; i++){
 		latent_rows[i] = init_dist(rng);
@@ -487,9 +489,7 @@ void NomadBody::updater_func(int thread_index){
 	count_setup_threads++;
 
 	for(unsigned int timeout_iter = 0; timeout_iter < option->timeouts_.size(); timeout_iter++){
-
 		cout << log_header << "thread: " << thread_index << " ready to train!" << endl;
-
 		// wait until all threads are ready
 		while(flag_train_ready == false){
 			std::this_thread::yield();
@@ -500,19 +500,30 @@ void NomadBody::updater_func(int thread_index){
 		/////////////////////////////////////////////////////////
 
 		while(flag_train_stop == false){
+			if(!allow_processing || !allow_processing_thread[thread_index]){
+				this_thread::yield();
+				continue;
+			}	
 
 			ColumnData* p_col;
 			bool pop_succeed = job_queues[thread_index].try_pop(p_col);
 
 			if(pop_succeed){ // there was an available column in job queue to process
 				// CP checking:
-				if(p_col->col_index_ == cp_signal_start){
-					// CP: start
-					signal_handler_start(thread_index, p_col, latent_rows, local_num_rows, dim);
-					continue;
-				} else if(p_col->col_index_ == cp_signal_flush){
-					signal_handler_flush(thread_index, p_col);
+				if(p_col->col_index_ == ColumnData::SIGNAL_CP_START){
+					int epoch = p_col->pos_;
 					column_pool->push(p_col);
+					cp_sht_start(thread_index, part_index, epoch, latent_rows, local_num_rows);
+					continue;
+				} else if(p_col->col_index_ == ColumnData::SIGNAL_CP_CLEAR){
+					int source = p_col->pos_;
+					column_pool->push(p_col);
+					cp_sht_clear(thread_index, part_index, source, latent_rows, local_num_rows);
+					continue;
+				} else if(p_col->col_index_ == ColumnData::SIGNAL_CP_RESUME){
+					int epoch = p_col->pos_;
+					column_pool->push(p_col);
+					cp_sht_resume(thread_index, part_index, epoch);
 					continue;
 				}
 
@@ -557,7 +568,6 @@ void NomadBody::updater_func(int thread_index){
 				p_col->pos_++;
 				// if the column was circulated in every thread inside the machine, send to another machine
 				if(p_col->pos_ >= num_threads * num_reuse){
-					// BUGBUG: now treating one machine case as special.. should I continue doing this?
 					if(numtasks == 1){
 						p_col->pos_ = 0;
 						p_col->source_ = part_index;

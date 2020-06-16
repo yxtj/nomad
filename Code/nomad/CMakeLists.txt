@@ -54,7 +54,8 @@ message(STATUS "Boost_LIBRARIES: ${Boost_LIBRARIES}")
 add_executable(nomad
 	main.cpp
 	nomad_option.cpp
-	nb_data.cpp nb_init.cpp nb_main.cpp nb_sendrecv.cpp nb_net_control.cpp nb_checkpoint.cpp
+	nb_data.cpp nb_init.cpp nb_main.cpp nb_sendrecv.cpp
+	nb_net_control.cpp nb_checkpoint_master.cpp nb_checkpoint.cpp
 )
 
 add_executable(synthgen synthgen.cpp)

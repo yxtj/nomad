@@ -59,6 +59,11 @@ void NomadBody::initial_data4thread(){
 	for(int i = 0; i < option->num_threads_; i++){
 		callocator<colque>().construct(job_queues + i);
 	}
+
+	allow_processing_thread = callocator<atomic<bool> >().allocate(option->num_threads_);
+	for(int i = 0; i < option->num_threads_; i++){
+		allow_processing_thread[i] = true;
+	}
 }
 
 void NomadBody::initial_data4machine(){
@@ -90,9 +95,14 @@ void NomadBody::initial_net_data(){
 void NomadBody::initial_cp(){
 	//master:
 	cp_master_epoch = 0;
+	cp_master_lfinish_count = 0;
 	//worker:
-	cp_epoch.resize(option->num_threads_, -1);
+	cp_epoch = -1;
+	cp_thread_wait_counter = 0;
 	checkpointing.resize(option->num_threads_, false);
+	cp_received_clear_counters = callocator<atomic<int>>().allocate(option->num_threads_);
+	for(int i = 0; i < option->num_threads_; ++i)
+		cp_received_clear_counters[i] = 0;
 	received_flush.resize(option->num_threads_, vector<bool>(num_parts, false));
 	count_recv_flush.resize(option->num_threads_, 0);
 	cp_fmsgs.resize(option->num_threads_);
@@ -150,6 +160,8 @@ bool NomadBody::initial(NomadOption* opt){
 
 	initial_cp();
 	initial_net_control();
+	allow_sending = true;
+	allow_processing = true;
 	finished = false;
 	return true;
 }
