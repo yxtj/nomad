@@ -30,13 +30,20 @@
 namespace nomad {
 
 struct ColumnData{
+public:
+	// speical signals of "col_index_"
+	// initialized once and used multiple times
+	static constexpr int SIGNAL_CP_START = -1;
+	static constexpr int SIGNAL_CP_CLEAR = -2;
+	static constexpr int SIGNAL_CP_LFINISH = -3;
+	static constexpr int SIGNAL_CP_RESUME = -4;
 
 public:
 	int col_index_; // its negative value is re-used as special signals
 	long flag_;
 	int source_; //set by receiver as MPI rank
 	int *perm_;
-	int pos_; // used as second parameter
+	int pos_; // re-used as second parameter when col_index_ is negative
 	scalar *values_;
 
 	char* serialize(char* cur_pos, const int dim){
