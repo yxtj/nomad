@@ -500,10 +500,15 @@ void NomadBody::updater_func(int thread_index){
 		/////////////////////////////////////////////////////////
 
 		while(flag_train_stop == false){
+			if(cp_action_ready[thread_index]){
+				cp_update_func_action(thread_index, part_index, latent_rows, local_num_rows);
+				cp_action_ready[thread_index] = false;
+			}
+
 			if(!allow_processing || !allow_processing_thread[thread_index]){
 				this_thread::yield();
 				continue;
-			}	
+			}
 
 			ColumnData* p_col;
 			bool pop_succeed = job_queues[thread_index].try_pop(p_col);

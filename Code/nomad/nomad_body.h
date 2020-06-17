@@ -140,23 +140,24 @@ private:
 	// data for checkpoint
 	// THE MAIN WORK FOR CHECKPOINT IS DONE IN updater_func() FOR MINIMIZEING THE MODIFICATION
 	bool finished;
-	atomic<int> cp_thread_wait_counter;
+	atomic<int> cp_ut_wait_counter;
 	vector<bool, callocator<bool> > checkpointing;
 	atomic<int>* cp_received_clear_counters;
 	vector<int, callocator<int> > count_recv_flush;
 	vector<vector<bool>, callocator<vector<bool> > > received_flush;
 	int cp_epoch;
 	string cp_folder;
+	atomic<bool>* cp_action_ready;
 
 	vector<long long, callocator<long long> > msg_archived;
 	vector<double, callocator<double> > cp_write_time;
+	vector<std::ofstream*> cp_fmsgs;
 
 	// for master
 	int cp_master_epoch;
 	std::mutex cp_m;
 	std::condition_variable cp_cv;
 	atomic<int> cp_master_lfinish_count;
-	vector<std::ofstream*> cp_fmsgs;
 
 	// network control
 	bool control_net_delay;
@@ -237,6 +238,7 @@ private:
 	void _send_sig2threads_start(int epoch);
 	void _send_sig2threads_clear(int source); // source rank
 	void _send_sig2threads_resume(int epoch);
+	void _wait_all_update_thread();
 
 	// signal handler - machine (MPI instance) level
 	void cp_shm_start(int epoch);
@@ -247,6 +249,8 @@ private:
 	void cp_sht_start(int thread_index, int part_index, int epoch, double* latent_rows, int local_num_rows);
 	void cp_sht_clear(int thread_index, int part_index, int source, double* latent_rows, int local_num_rows);
 	void cp_sht_resume(int thread_index, int part_index, int epoch);
+
+	void cp_update_func_action(int thread_index, int part_index, double* latent_rows, int local_num_rows);
 
 	void signal_handler_start(int thread_index, ColumnData* p_col, double* latent_rows, int local_num_rows);
 	void signal_handler_clear(int thread_index, ColumnData* p_col);

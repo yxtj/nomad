@@ -249,13 +249,25 @@ void NomadBody::_send_sig2threads_resume(int epoch)
 	}
 }
 
+void NomadBody::_wait_all_update_thread()
+{
+	++cp_ut_wait_counter;
+	while(cp_ut_wait_counter < option->num_threads_){
+		this_thread::yield();
+	}
+}
+
 // machine level
 
 void NomadBody::cp_shm_start(int epoch)
 {
 	if(option->cp_type_ == "sync"){
 		allow_sending = false;
-		_send_sig2threads_start(epoch);
+		allow_processing = false;
+		for(int i = 0; i < option->num_threads_; ++i){
+			allow_processing_thread[i] = false;
+			cp_action_ready[i] = true;
+		}
 	}else if(option->cp_type_ == "async"){
 		_send_sig2threads_start(epoch);
 	}else if(option->cp_type_ == "vs"){
@@ -297,7 +309,7 @@ void NomadBody::cp_shm_resume(int epoch)
 	} else{
 
 	}
-	cp_thread_wait_counter = 0;
+	cp_ut_wait_counter = 0;
 }
 
 // thread level
@@ -305,12 +317,7 @@ void NomadBody::cp_shm_resume(int epoch)
 void NomadBody::cp_sht_start(int thread_index, int part_index, int epoch, double* latent_rows, int local_num_rows)
 {
 	if(option->cp_type_ == "sync"){
-		allow_processing_thread[thread_index] = false;
-		archive_local(thread_index, latent_rows, local_num_rows);
-		++cp_thread_wait_counter;
-		if(cp_thread_wait_counter == option->num_threads_){
-			_send_lfinish_signal();
-		}
+		// nothing
 	} else if(option->cp_type_ == "async"){
 
 	} else if(option->cp_type_ == "vs"){
@@ -351,6 +358,23 @@ void NomadBody::cp_sht_resume(int thread_index, int part_index, int epoch)
 	}
 }
 
+void NomadBody::cp_update_func_action(int thread_index, int part_index, double* latent_rows, int local_num_rows)
+{
+	if(option->cp_type_ == "sync"){
+		_wait_all_update_thread();
+		archive_local(thread_index, latent_rows, local_num_rows);
+		if(thread_index == 0){
+			_send_lfinish_signal();
+		}
+	} else if(option->cp_type_ == "async"){
+
+	} else if(option->cp_type_ == "vs"){
+
+	} else{
+
+	}
+
+}
 
 /////////////////////////////////////////////////////////
 // Define Checkpoint functions for ASYNC

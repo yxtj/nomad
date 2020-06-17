@@ -98,7 +98,7 @@ void NomadBody::initial_cp(){
 	cp_master_lfinish_count = 0;
 	//worker:
 	cp_epoch = -1;
-	cp_thread_wait_counter = 0;
+	cp_ut_wait_counter = 0;
 	checkpointing.resize(option->num_threads_, false);
 	cp_received_clear_counters = callocator<atomic<int>>().allocate(option->num_threads_);
 	for(int i = 0; i < option->num_threads_; ++i)
@@ -109,6 +109,9 @@ void NomadBody::initial_cp(){
 	//cp_state.resize(option->num_threads_, CheckpointState(num_parts));
 	msg_archived.resize(option->num_threads_, 0);
 	cp_write_time.resize(option->num_threads_, 0.0);
+	cp_action_ready = callocator<atomic<bool>>().allocate(option->num_threads_);
+	for(int i = 0; i < option->num_threads_; ++i)
+		cp_action_ready[i] = false;
 }
 
 void NomadBody::initial_net_control(){
