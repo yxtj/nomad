@@ -513,22 +513,21 @@ void NomadBody::updater_func(int thread_index){
 			ColumnData* p_col;
 			bool pop_succeed = job_queues[thread_index].try_pop(p_col);
 
-			if(pop_succeed){ // there was an available column in job queue to process
+			if(pop_succeed){
+				// there was an available column in job queue to process
 				// CP checking:
-				if(p_col->col_index_ == ColumnData::SIGNAL_CP_START){
-					int epoch = p_col->pos_;
+				if(p_col->col_index_ < 0){
+					if(p_col->col_index_ == ColumnData::SIGNAL_CP_START){
+						int epoch = p_col->pos_;
+						cp_sht_start(thread_index, part_index, epoch, latent_rows, local_num_rows);
+					} else if(p_col->col_index_ == ColumnData::SIGNAL_CP_CLEAR){
+						int source = p_col->pos_;
+						cp_sht_clear(thread_index, part_index, source, latent_rows, local_num_rows);
+					} else if(p_col->col_index_ == ColumnData::SIGNAL_CP_RESUME){
+						int epoch = p_col->pos_;
+						cp_sht_resume(thread_index, part_index, epoch);
+					}
 					column_pool->push(p_col);
-					cp_sht_start(thread_index, part_index, epoch, latent_rows, local_num_rows);
-					continue;
-				} else if(p_col->col_index_ == ColumnData::SIGNAL_CP_CLEAR){
-					int source = p_col->pos_;
-					column_pool->push(p_col);
-					cp_sht_clear(thread_index, part_index, source, latent_rows, local_num_rows);
-					continue;
-				} else if(p_col->col_index_ == ColumnData::SIGNAL_CP_RESUME){
-					int epoch = p_col->pos_;
-					column_pool->push(p_col);
-					cp_sht_resume(thread_index, part_index, epoch);
 					continue;
 				}
 
@@ -564,8 +563,8 @@ void NomadBody::updater_func(int thread_index){
 
 				col_update_counts[col_index]++;
 
-				// CP: archive message
-				if(checkpointing[thread_index] && !received_flush[thread_index][p_col->source_]){
+				// CP: archive message (async)
+				if(cp_need_archive_msg_from[thread_index][p_col->source_]){
 					archive_msg(thread_index, p_col);
 				}
 
@@ -692,7 +691,7 @@ void NomadBody::updater_func(int thread_index){
 		// notify that this thread has finished testing
 		count_setup_threads++;
 
-	}
+	} // timeout list
 
 	// print to the file
 	if(option->output_path_.length() > 0){

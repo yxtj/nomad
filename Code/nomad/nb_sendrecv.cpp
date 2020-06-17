@@ -46,8 +46,7 @@ void NomadBody::train_send_func(const double timeout){
 	while(true){
 
 		double elapsed_seconds = (tbb::tick_count::now() - start_time).seconds();
-		if(elapsed_seconds > timeout &&
-			std::none_of(checkpointing.begin(), checkpointing.end(), [](const bool v){return v; })){
+		if(elapsed_seconds > timeout && !checkpointing){
 			break;
 		}
 
@@ -72,7 +71,7 @@ void NomadBody::train_send_func(const double timeout){
 					cur_num = 0;
 				}
 				//send clear signal
-				*reinterpret_cast<int*>(send_message) = p_col->pos_;	//set source part_index
+				*reinterpret_cast<int*>(send_message) = p_col->pos_;	//set source rank
 				for(int target_rank = 0; target_rank < numtasks; ++target_rank){
 					if(target_rank == rank)
 						continue;
@@ -195,7 +194,7 @@ void NomadBody::train_recv_func(){
 				num_dead++;
 			} else{
 				char* cur_pos = recv_message + sizeof(int) + sizeof(int);
-				int source = status.MPI_SOURCE * option->num_threads_;
+				int source = status.MPI_SOURCE;// * option->num_threads_;
 				for(int i = 0; i < num_received; i++){
 					ColumnData* p_col = column_pool->pop();
 					p_col->deserialize(cur_pos, dim);

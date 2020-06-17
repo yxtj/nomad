@@ -140,14 +140,16 @@ private:
 	// data for checkpoint
 	// THE MAIN WORK FOR CHECKPOINT IS DONE IN updater_func() FOR MINIMIZEING THE MODIFICATION
 	bool finished;
+	atomic<bool> checkpointing;
 	atomic<int> cp_ut_wait_counter;
-	vector<bool> checkpointing;
-	atomic<bool>* cp_action_ready; // for each thread
+	atomic<bool>* cp_action_ready; // each thread
 	atomic<int> cp_received_clear_counter;
-	vector<int, callocator<int> > count_recv_flush;
-	vector<vector<bool>, callocator<vector<bool> > > received_flush;
+	vector<atomic<bool>*> cp_need_archive_msg_from; // each thread - mpi instance
+	atomic<int>* cp_need_archive_msg_counter; // each thread
+
+	//vector<int, callocator<int> > count_recv_flush;
+	//vector<vector<bool>, callocator<vector<bool> > > received_flush;
 	int cp_epoch;
-	string cp_folder;
 
 	vector<long long, callocator<long long> > msg_archived;
 	vector<double, callocator<double> > cp_write_time;
@@ -224,14 +226,14 @@ private:
 	void _send_lfinish_signal();
 	string gen_cp_file_name(int part_index);
 
-	bool start_cp(int thread_index, int epoch);
+	//bool start_cp(int thread_index, int epoch);
 	void archive_local(int thread_index, double* latent_rows, int local_num_rows);
 	void _archive_msg_queue(int thread_index, const string& suffix, colque& queue, bool locked = true);
 	void arhive_job_queue(int thread_index, bool locked = true);
 	void arhive_send_queue(bool locked = true);
 	void archive_msg_queue_all(bool locked = true);
 	void archive_msg(int thread_index, ColumnData* p_col);
-	void finish_cp(int thread_index);
+	//void finish_cp(int thread_index);
 
 	void restore_local(const string& cp_f, int part_index, double* latent_rows, int& local_num_rows, int& dim);
 	void restore_msg_queue(const string& cp_f, colque& queue);
@@ -252,17 +254,8 @@ private:
 	void cp_sht_clear(int thread_index, int part_index, int source, double* latent_rows, int local_num_rows);
 	void cp_sht_resume(int thread_index, int part_index, int epoch);
 
-	// only execute once
+	// cp action which only execute once
 	void cp_update_func_action(int thread_index, int part_index, double* latent_rows, int local_num_rows);
-
-	void signal_handler_start(int thread_index, ColumnData* p_col, double* latent_rows, int local_num_rows);
-	void signal_handler_clear(int thread_index, ColumnData* p_col);
-	void signal_handler_resume(int thread_index, ColumnData* p_col);
-
-	// SYNC checkpoint functions
-	void cp_sht_start_sync(int thread_index, ColumnData* p_col, double* latent_rows, int local_num_rows);
-	void cp_sht_clear_sync(int thread_index, ColumnData* p_col);
-	void cp_sht_resume_sync(int thread_index, ColumnData* p_col);
 
 public:
 	int run(NomadOption* opt);

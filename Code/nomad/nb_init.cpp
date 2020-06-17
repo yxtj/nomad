@@ -99,10 +99,18 @@ void NomadBody::initial_cp(){
 	//worker:
 	cp_epoch = -1;
 	cp_ut_wait_counter = 0;
-	checkpointing.resize(option->num_threads_, false);
+	checkpointing = false;
 	cp_received_clear_counter = 0;
-	received_flush.resize(option->num_threads_, vector<bool>(num_parts, false));
-	count_recv_flush.resize(option->num_threads_, 0);
+	//received_flush.resize(option->num_threads_, vector<bool>(num_parts, false));
+	cp_need_archive_msg_from.resize(option->num_threads_);
+	cp_need_archive_msg_counter = callocator<atomic<int>>().allocate(numtasks);
+	for(int i = 0; i < option->num_threads_; ++i){
+		cp_need_archive_msg_counter = 0;
+		cp_need_archive_msg_from[i] = callocator<atomic<bool>>().allocate(numtasks);
+		for(int j = 0; j < numtasks; ++j)
+			cp_need_archive_msg_from[i][j] = false;
+	}
+	//count_recv_flush.resize(option->num_threads_, 0);
 	cp_fmsgs.resize(option->num_threads_);
 	//cp_state.resize(option->num_threads_, CheckpointState(num_parts));
 	msg_archived.resize(option->num_threads_, 0);
