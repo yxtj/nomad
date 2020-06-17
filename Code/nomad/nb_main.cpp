@@ -405,6 +405,16 @@ int NomadBody::run(NomadOption* opt){
 
 	callocator<atomic<int> >().deallocate(queue_current_sizes, numtasks);
 
+	callocator<atomic<bool> >().deallocate(allow_processing_thread, option->num_threads_);
+
+	// cp part
+	callocator<atomic<bool> >().deallocate(cp_action_ready, option->num_threads_);
+	for(int i = 0; i < numtasks; ++i){
+		callocator<atomic<bool> >().deallocate(cp_need_archive_msg_from[i], numtasks);
+	}
+	callocator<atomic<int> >().deallocate(cp_need_archive_msg_counter, option->num_threads_);
+	
+
 	delete column_pool;
 
 	MPI_Finalize();

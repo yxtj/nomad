@@ -289,7 +289,6 @@ void NomadBody::cp_sht_start(int thread_index, int part_index, int epoch, double
 	if(option->cp_type_ == "sync"){
 		// nothing
 	} else if(option->cp_type_ == "async"){
-		//start_cp(thread_index);
 		for(int i = 0; i < numtasks; ++i)
 			cp_need_archive_msg_from[thread_index][i] = true;
 		archive_local(thread_index, latent_rows, local_num_rows);
