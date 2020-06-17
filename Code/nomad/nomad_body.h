@@ -73,7 +73,7 @@ protected:
 
 	// data members:
 private:
-	int numtasks, rank;
+	int mpi_size, mpi_rank;
 	int hostname_len;
 	char hostname[MPI_MAX_PROCESSOR_NAME];
 

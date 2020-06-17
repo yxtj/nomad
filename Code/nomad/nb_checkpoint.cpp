@@ -19,17 +19,17 @@ using namespace std;
 void NomadBody::_send_clear_signal(bool send2self, bool direct_send)
 {
 	if(direct_send){
-		int source = rank;
-		for(int target_rank = 0; target_rank < numtasks; ++target_rank){
+		int source = mpi_rank;
+		for(int target_rank = 0; target_rank < mpi_size; ++target_rank){
 			// including itself
-			if(!send2self && target_rank == rank)
+			if(!send2self && target_rank == mpi_rank)
 				continue;
 			send_queue_force.emplace(ColumnData::SIGNAL_CP_CLEAR, target_rank);
 		}
 	} else{
 		ColumnData* p_col = column_pool->pop();
 		p_col->col_index_ = ColumnData::SIGNAL_CP_CLEAR; //set message type
-		p_col->pos_ = rank; // set source
+		p_col->pos_ = mpi_rank; // set source
 		send_queue.push(p_col);
 	}
 }
@@ -51,7 +51,7 @@ string NomadBody::gen_cp_file_name(int part_index)
 /////////////////////////////////////////////////////////
 void NomadBody::archive_local(int thread_index, double* latent_rows, int local_num_rows){
 	tick_count t0 = tbb::tick_count::now();
-	int part_index = rank * option->num_threads_ + thread_index;
+	int part_index = mpi_rank * option->num_threads_ + thread_index;
 	int dim = option->latent_dimension_;
 	ofstream fout(gen_cp_file_name(part_index) + ".state", ofstream::binary);
 	fout.write(reinterpret_cast<char*>(&local_num_rows), sizeof(local_num_rows));
@@ -64,7 +64,7 @@ void NomadBody::archive_local(int thread_index, double* latent_rows, int local_n
 void NomadBody::_archive_msg_queue(int thread_index, const string& suffix, colque& queue, bool locked)
 {
 	tick_count t0 = tbb::tick_count::now();
-	int part_index = rank * option->num_threads_ + thread_index;
+	int part_index = mpi_rank * option->num_threads_ + thread_index;
 	char* buffer = new char[unit_bytenum];
 	colque temp;
 	ofstream fout(gen_cp_file_name(part_index) + suffix, ofstream::binary);
@@ -146,7 +146,7 @@ void NomadBody::restore_msg_queue(const string& cp_f, colque& queue){
 
 void NomadBody::restore(int epoch, int thread_index, double* latent_rows, int& local_num_rows, int& dim){
 	cp_epoch = epoch;
-	int part_index = rank * option->num_threads_ + thread_index;
+	int part_index = mpi_rank * option->num_threads_ + thread_index;
 	string cp_f = gen_cp_file_name(part_index);
 	restore_local(cp_f + ".state", part_index, latent_rows, local_num_rows, dim);
 	for(int thread_index = 0; thread_index < option->num_threads_; ++thread_index){
@@ -229,7 +229,7 @@ void NomadBody::cp_shm_clear(int source)
 		_send_sig2threads_clear(source);
 	} else if(option->cp_type_ == "vs"){
 		++cp_received_clear_counter;
-		if(cp_received_clear_counter == numtasks){
+		if(cp_received_clear_counter == mpi_size){
 			// temporarily stop processing to sablize the send_queue
 			allow_processing = false;
 			for(int i = 0; i < option->num_threads_; ++i)
@@ -253,7 +253,7 @@ void NomadBody::cp_shm_resume(int epoch)
 	} else if(option->cp_type_ == "async"){
 		for(int i = 0; i < option->num_threads_; ++i){
 			cp_need_archive_msg_counter[i] = 0;
-			for(int j = 0; j < numtasks; ++j)
+			for(int j = 0; j < mpi_size; ++j)
 				cp_need_archive_msg_from[i][j] = false;
 		}
 	} else if(option->cp_type_ == "vs"){
@@ -273,7 +273,7 @@ void NomadBody::cp_sht_start(int thread_index, int part_index, int epoch, double
 	if(option->cp_type_ == "sync"){
 		// nothing
 	} else if(option->cp_type_ == "async"){
-		for(int i = 0; i < numtasks; ++i)
+		for(int i = 0; i < mpi_size; ++i)
 			cp_need_archive_msg_from[thread_index][i] = true;
 		archive_local(thread_index, latent_rows, local_num_rows);
 		cp_fmsgs[thread_index] = new ofstream(gen_cp_file_name(part_index) + ".msg", ofstream::binary);
@@ -291,7 +291,7 @@ void NomadBody::cp_sht_clear(int thread_index, int part_index, int source, doubl
 	} else if(option->cp_type_ == "async"){
 		cp_need_archive_msg_from[thread_index][source] = false;
 		++cp_need_archive_msg_counter[thread_index];
-		if(cp_need_archive_msg_counter[thread_index] == numtasks){
+		if(cp_need_archive_msg_counter[thread_index] == mpi_size){
 			cp_fmsgs[thread_index]->close();
 			cp_fmsgs[thread_index]->clear();
 			delete cp_fmsgs[thread_index];

@@ -27,7 +27,7 @@ void NomadBody::master_func(){
 			cout << log_header << "sending out checkpoint signal " << cp_master_epoch << endl;
 			send_queue_force.emplace(ColumnData::SIGNAL_CP_START, cp_master_epoch);
 			// wait for local finish
-			while(cp_master_lfinish_count < numtasks){
+			while(cp_master_lfinish_count < mpi_size){
 				this_thread::sleep_for(chrono::duration<double>(0.05));
 				//this_thread::yield();
 			}

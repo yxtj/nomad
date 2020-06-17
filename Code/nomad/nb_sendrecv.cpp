@@ -44,9 +44,9 @@ void NomadBody::_send_msg(char* send_message, const int cur_num, const int targe
 // Define Training Sender Thread
 /////////////////////////////////////////////////////////
 void NomadBody::train_send_func(const double timeout){
-	string log_header = "W" + to_string(rank) + "-S: ";
-	mt19937_64 send_rng(rank * 17 + option->seed_ + option->num_threads_ + 2);
-	std::uniform_int_distribution<> target_dist(0, numtasks - 1);
+	string log_header = "W" + to_string(mpi_rank) + "-S: ";
+	mt19937_64 send_rng(mpi_rank * 17 + option->seed_ + option->num_threads_ + 2);
+	std::uniform_int_distribution<> target_dist(0, mpi_size - 1);
 
 	const int dim = option->latent_dimension_;
 
@@ -72,7 +72,7 @@ void NomadBody::train_send_func(const double timeout){
 		}
 
 		//if(monitor_num < elapsed_seconds){
-		//	cout << log_header << "sender thread alive," << rank << "," << monitor_num << ","
+		//	cout << log_header << "sender thread alive," << mpi_rank << "," << monitor_num << ","
 		//			<< send_queue.unsafe_size() << ",endline" << endl;
 		//	monitor_num++;
 		//}
@@ -80,10 +80,10 @@ void NomadBody::train_send_func(const double timeout){
 		if(send_queue_force.try_pop(force_sent_signal)){
 			if(force_sent_signal.first == ColumnData::SIGNAL_CP_START){
 				int epoch = force_sent_signal.second;
-				for(int i = 0; i < numtasks; ++i)
+				for(int i = 0; i < mpi_size; ++i)
 					MPI_Ssend(reinterpret_cast<void*>(&epoch), sizeof(epoch), MPI_CHAR, i, MsgType::CP_START, MPI_COMM_WORLD);
 			} else if(force_sent_signal.first == ColumnData::SIGNAL_CP_CLEAR){
-				int source = rank;
+				int source = mpi_rank;
 				int target_rank = force_sent_signal.second;
 				MPI_Ssend(reinterpret_cast<void*>(&source), sizeof(source), MPI_CHAR, target_rank, MsgType::CP_CLEAR, MPI_COMM_WORLD);
 			} else if(force_sent_signal.first == ColumnData::SIGNAL_CP_LFINISH){
@@ -91,14 +91,14 @@ void NomadBody::train_send_func(const double timeout){
 				MPI_Ssend(reinterpret_cast<void*>(&epoch), sizeof(epoch), MPI_CHAR, 0, MsgType::CP_LFINISH, MPI_COMM_WORLD);
 			} else if(force_sent_signal.first == ColumnData::SIGNAL_CP_RESUME){
 				int epoch = force_sent_signal.second;
-				for(int i = 0; i < numtasks; ++i)
+				for(int i = 0; i < mpi_size; ++i)
 					MPI_Ssend(reinterpret_cast<void*>(&epoch), sizeof(epoch), MPI_CHAR, i, MsgType::CP_RESUME, MPI_COMM_WORLD);
 			} else if(force_sent_signal.first == ColumnData::SIGNAL_LERROR){
 				double lerror = train_col_error_sum;
 				MPI_Ssend(reinterpret_cast<void*>(&lerror), sizeof(lerror), MPI_CHAR, 0, MsgType::LOCAL_ERROR, MPI_COMM_WORLD);
 			} else if(force_sent_signal.first == ColumnData::SIGNAL_TERMINATE){
 				int cnt = force_sent_signal.second;
-				for(int i = 0; i < numtasks; ++i)
+				for(int i = 0; i < mpi_size; ++i)
 					MPI_Ssend(reinterpret_cast<void*>(&cnt), sizeof(cnt), MPI_CHAR, i, MsgType::TERMINATION, MPI_COMM_WORLD);
 			}
 			continue;
@@ -119,8 +119,8 @@ void NomadBody::train_send_func(const double timeout){
 					cur_num = 0;
 				}
 				//send clear signal
-				*reinterpret_cast<int*>(send_message) = p_col->pos_;	//set source rank
-				for(int target_rank = 0; target_rank < numtasks; ++target_rank){
+				*reinterpret_cast<int*>(send_message) = p_col->pos_;	//set source mpi_rank
+				for(int target_rank = 0; target_rank < mpi_size; ++target_rank){
 					// including itself
 					int rc = MPI_Ssend(send_message, sizeof(int), MPI_CHAR, target_rank, MsgType::CP_CLEAR, MPI_COMM_WORLD);
 					if(rc != MPI_SUCCESS){
@@ -167,8 +167,8 @@ void NomadBody::train_send_func(const double timeout){
 	}
 
 	// send dying message to every machine
-	*(reinterpret_cast<int*>(send_message) + 1) = -(rank + 1);
-	for(int i = 0; i < numtasks; i++){
+	*(reinterpret_cast<int*>(send_message) + 1) = -(mpi_rank + 1);
+	for(int i = 0; i < mpi_size; i++){
 		//tbb::tick_count t = tbb::tick_count::now();
 		int rc = MPI_Ssend(send_message, msg_bytenum, MPI_CHAR, i, MsgType::DATA, MPI_COMM_WORLD);
 		if(rc != MPI_SUCCESS){
@@ -187,7 +187,7 @@ void NomadBody::train_send_func(const double timeout){
 // Define Training Receive Function
 /////////////////////////////////////////////////////////
 void NomadBody::train_recv_func(){
-	string log_header = "W" + to_string(rank) + "-R: ";
+	string log_header = "W" + to_string(mpi_rank) + "-R: ";
 	const int dim = option->latent_dimension_;
 	char* recv_message = sallocator<char>().allocate(msg_bytenum);
 
@@ -198,11 +198,11 @@ void NomadBody::train_recv_func(){
 
 	MPI_Status status;
 
-	while(num_dead < numtasks){
+	while(num_dead < mpi_size){
 
 		//double elapsed_seconds = (tbb::tick_count::now() - start_time).seconds();
 		//if(monitor_num < elapsed_seconds){
-		//	cout << log_header << "receiver thread alive," << rank << "," << monitor_num << endl;
+		//	cout << log_header << "receiver thread alive," << mpi_rank << "," << monitor_num << endl;
 		//	monitor_num++;
 		//}
 
@@ -264,8 +264,8 @@ void NomadBody::train_recv_func(){
 // Define Testing Sender Thread
 /////////////////////////////////////////////////////////
 void NomadBody::test_send_func(){
-	string log_header = "W" + to_string(rank) + "-S: ";
-	const long mask = (1L << rank);
+	string log_header = "W" + to_string(mpi_rank) + "-S: ";
+	const long mask = (1L << mpi_rank);
 
 	const int dim = option->latent_dimension_;
 
@@ -278,8 +278,8 @@ void NomadBody::test_send_func(){
 
 	int send_count = 0;
 
-	int target_rank = rank + 1;
-	target_rank %= numtasks;
+	int target_rank = mpi_rank + 1;
+	target_rank %= mpi_size;
 
 	while(send_count < global_num_cols){
 
@@ -357,7 +357,7 @@ void NomadBody::test_send_func(){
 
 	sallocator<char>().deallocate(send_message, msg_bytenum);
 
-	cout << log_header << "test send thread finishing," << rank << endl;
+	cout << log_header << "test send thread finishing," << mpi_rank << endl;
 
 } // end of test_send_func
 
@@ -365,7 +365,7 @@ void NomadBody::test_send_func(){
 // Define Testing Receive Function
 /////////////////////////////////////////////////////////
 void NomadBody::test_recv_func(){
-	string log_header = "W" + to_string(rank) + "-R: ";
+	string log_header = "W" + to_string(mpi_rank) + "-R: ";
 	const int dim = option->latent_dimension_;
 	char* recv_message = sallocator<char>().allocate(msg_bytenum);
 
@@ -376,7 +376,7 @@ void NomadBody::test_recv_func(){
 
 	MPI_Status status;
 
-	const long mask = (1L << rank);
+	const long mask = (1L << mpi_rank);
 
 	while(recv_count < global_num_cols){
 

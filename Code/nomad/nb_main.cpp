@@ -63,7 +63,7 @@ int NomadBody::run(NomadOption* opt){
 	//std::condition_variable print_waiter;
 
 	std::thread* master_thread = nullptr;
-	if(rank == 0 && option->cp_type_ != "none"){
+	if(mpi_rank == 0 && option->cp_type_ != "none"){
 		master_thread = new std::thread(std::bind(&NomadBody::master_func, this));
 	}
 
@@ -83,18 +83,18 @@ int NomadBody::run(NomadOption* opt){
 	// Initialize Columns
 	/////////////////////////////////////////////////////////
 
-	mt19937_64 rng(option->seed_ + rank * 131 + 139);
+	mt19937_64 rng(option->seed_ + mpi_rank * 131 + 139);
 	std::uniform_real_distribution<double> init_dist(0, 1.0 / sqrt(option->latent_dimension_));
 
-	int columns_per_machine = global_num_cols / numtasks + ((global_num_cols % numtasks > 0) ? 1 : 0);
-	int col_start = columns_per_machine * rank;
-	int col_end = std::min(columns_per_machine * (rank + 1), global_num_cols);
+	int columns_per_machine = global_num_cols / mpi_size + ((global_num_cols % mpi_size > 0) ? 1 : 0);
+	int col_start = columns_per_machine * mpi_rank;
+	int col_end = std::min(columns_per_machine * (mpi_rank + 1), global_num_cols);
 
 	// generate columns
 	for(int i = col_start; i < col_end; i++){
 
 		// create additional RNG, to make it identical to other programs
-		mt19937_64 rng_temp(option->seed_ + rank + 137);
+		mt19937_64 rng_temp(option->seed_ + mpi_rank + 137);
 
 		// create a column
 		ColumnData* p_col = column_pool->pop();
@@ -112,7 +112,7 @@ int NomadBody::run(NomadOption* opt){
 		job_queues[p_col->perm_[p_col->pos_]].push(p_col);
 	}
 
-	if(rank == 0){
+	if(mpi_rank == 0){
 		for(double ttt : option->timeouts_){
 			cout << log_header << "timeout: " << ttt << endl;
 		}
@@ -174,7 +174,7 @@ int NomadBody::run(NomadOption* opt){
 
 				MPI_Allreduce(&num_columns_prepared, &global_num_columns_prepared, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
-				if(rank == 0){
+				if(mpi_rank == 0){
 					cout << log_header << "num columns prepared: " << global_num_columns_prepared << " / " << global_num_cols << endl;
 					std::this_thread::sleep_for(std::chrono::duration<double>(0.2));
 				}
@@ -203,14 +203,14 @@ int NomadBody::run(NomadOption* opt){
 
 		// receive columns for testing
 		test_recv_func();
-		cout << log_header << "test receive done," << rank << endl;
+		cout << log_header << "test receive done," << mpi_rank << endl;
 
 		test_send_thread.join();
 
 		// test done
 		flag_test_stop = true;
 
-		cout << log_header << "waiting to join with updaters," << rank << endl;
+		cout << log_header << "waiting to join with updaters," << mpi_rank << endl;
 
 		while(count_setup_threads < option->num_threads_){
 			std::this_thread::yield();
@@ -270,7 +270,7 @@ int NomadBody::run(NomadOption* opt){
 
 		MPI_Barrier(MPI_COMM_WORLD);
 
-		if(rank == 0){
+		if(mpi_rank == 0){
 			cout << log_header << "=====================================================" << endl;
 			cout << log_header << "elapsed time: " << option->timeouts_[main_timeout_iter] << endl;
 			cout << log_header << "current training RMSE: " << std::fixed << std::setprecision(10)
@@ -278,7 +278,7 @@ int NomadBody::run(NomadOption* opt){
 			cout << log_header << "current test RMSE: " << std::fixed << std::setprecision(10)
 				<< sqrt(global_test_sum_error / global_test_count_error) << endl;
 
-			cout << log_header << "testgrep," << numtasks << "," << option->num_threads_ << ","
+			cout << log_header << "testgrep," << mpi_size << "," << option->num_threads_ << ","
 				<< option->timeouts_[main_timeout_iter] << "," << global_num_updates << ","
 				<< sqrt(global_test_sum_error / global_test_count_error)
 				<< "," << global_test_sum_error << "," << global_test_count_error
@@ -335,7 +335,7 @@ int NomadBody::run(NomadOption* opt){
 		updater_threads[i].join();
 	}
 
-	if(rank == 0 && option->cp_type_ != "none"){
+	if(mpi_rank == 0 && option->cp_type_ != "none"){
 		double machine_cp_write_time = std::accumulate(cp_write_time.begin(), cp_write_time.end(), 0.0);
 		double global_cp_write_time = 0.0;
 		MPI_Allreduce(&machine_cp_write_time, &global_cp_write_time, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
@@ -346,9 +346,9 @@ int NomadBody::run(NomadOption* opt){
 	// output column part
 	if(option->output_path_.length() > 0){
 		MPI_Barrier(MPI_COMM_WORLD);
-		for(int task_iter = 0; task_iter < numtasks; task_iter++){
-			if(task_iter == rank){
-				ofstream ofs(option->output_path_ + std::to_string(rank), ofstream::out | ofstream::app);
+		for(int task_iter = 0; task_iter < mpi_size; task_iter++){
+			if(task_iter == mpi_rank){
+				ofstream ofs(option->output_path_ + std::to_string(mpi_rank), ofstream::out | ofstream::app);
 				for(ColumnData* p_col : saved_columns){
 					ofs << "column," << (p_col->col_index_);
 					for(int t = 0; t < option->latent_dimension_; t++){
@@ -386,14 +386,14 @@ int NomadBody::run(NomadOption* opt){
 
 	callocator<atomic<bool> >().deallocate(is_column_empty, global_num_cols);
 
-	callocator<atomic<int> >().deallocate(queue_current_sizes, numtasks);
+	callocator<atomic<int> >().deallocate(queue_current_sizes, mpi_size);
 
 	callocator<atomic<bool> >().deallocate(allow_processing_thread, option->num_threads_);
 
 	// cp part
 	callocator<atomic<bool> >().deallocate(cp_action_ready, option->num_threads_);
-	for(int i = 0; i < numtasks; ++i){
-		callocator<atomic<bool> >().deallocate(cp_need_archive_msg_from[i], numtasks);
+	for(int i = 0; i < mpi_size; ++i){
+		callocator<atomic<bool> >().deallocate(cp_need_archive_msg_from[i], mpi_size);
 	}
 	callocator<atomic<int> >().deallocate(cp_need_archive_msg_counter, option->num_threads_);
 	
@@ -414,15 +414,15 @@ void NomadBody::master_termcheck()
 	double diff = numeric_limits<double>::infinity();
 	while(diff > option->min_error){
 		std::unique_lock<std::mutex> lk(tm_m);
-		while(any_of(local_error_ready, local_error_ready + numtasks,
+		while(any_of(local_error_ready, local_error_ready + mpi_size,
 			[](const atomic<bool>& b){return !b.load(); }))
 		{
 			tm_cv.wait(lk, [&](){
-				return all_of(local_error_ready, local_error_ready + numtasks,
+				return all_of(local_error_ready, local_error_ready + mpi_size,
 					[](const atomic<bool>& b){return b.load(); });
 				});
 		}
-		for(int i = 0; i < numtasks; ++i)
+		for(int i = 0; i < mpi_size; ++i)
 			local_error_ready[i] = false;
 		double sum = accumulate(local_error_received.begin(), local_error_received.end(), 0.0);
 		diff = abs(sum - global_error);
@@ -438,7 +438,7 @@ void NomadBody::sh_m_lerror(int source, double error)
 	std::unique_lock<std::mutex> lk(tm_m);
 	local_error_received[source] = error;
 	local_error_ready[source] = true;
-	if(all_of(local_error_ready, local_error_ready + numtasks,
+	if(all_of(local_error_ready, local_error_ready + mpi_size,
 		[](const atomic<bool>& b){return b.load(); }))
 	{
 		tm_cv.notify_all();
@@ -449,9 +449,9 @@ void NomadBody::sh_m_lerror(int source, double error)
 // Define Updater Thread
 /////////////////////////////////////////////////////////
 void NomadBody::updater_func(int thread_index){
-	int part_index = rank * option->num_threads_ + thread_index;
-	string log_header = (boost::format("W%d-%d: ") % rank % thread_index).str();
-	cout << log_header << boost::format("rank: %d, thread_index: %d, part_index: %d") % rank % thread_index % part_index << endl;
+	int part_index = mpi_rank * option->num_threads_ + thread_index;
+	string log_header = (boost::format("W%d-%d: ") % mpi_rank % thread_index).str();
+	cout << log_header << boost::format("rank: %d, thread_index: %d, part_index: %d") % mpi_rank % thread_index % part_index << endl;
 
 	/////////////////////////////////////////////////////////
 	// Read Data
@@ -496,7 +496,7 @@ void NomadBody::updater_func(int thread_index){
 	double* latent_rows = sallocator<double>().allocate(local_num_rows * option->latent_dimension_);
 
 	// initialize random number generator
-	mt19937_64 rng(option->seed_ + rank * 131 + thread_index + 1);
+	mt19937_64 rng(option->seed_ + mpi_rank * 131 + thread_index + 1);
 	std::uniform_real_distribution<double> init_dist(0, 1.0 / sqrt(option->latent_dimension_));
 	for(int i = 0; i < local_num_rows * option->latent_dimension_; i++){
 		latent_rows[i] = init_dist(rng);
@@ -606,7 +606,7 @@ void NomadBody::updater_func(int thread_index){
 				p_col->pos_++;
 				// if the column was circulated in every thread inside the machine, send to another machine
 				if(p_col->pos_ >= num_threads * num_reuse){
-					if(numtasks == 1){
+					if(mpi_size == 1){
 						p_col->pos_ = 0;
 						p_col->source_ = part_index;
 						job_queues[p_col->perm_[p_col->pos_ % num_threads]].push(p_col);
@@ -652,7 +652,7 @@ void NomadBody::updater_func(int thread_index){
 
 			//double elapsed_seconds = (tbb::tick_count::now() - start_time).seconds();
 			//if(monitor_num < elapsed_seconds){
-			//	cout << log_header << "test updater alive," << rank << ","<< monitor_num << ","
+			//	cout << log_header << "test updater alive," << mpi_rank << ","<< monitor_num << ","
 			//			<< num_col_processed << "/" << global_num_cols << "" << endl;
 			//	monitor_num++;
 			//}
@@ -736,7 +736,7 @@ void NomadBody::updater_func(int thread_index){
 
 		ofstream::openmode mode = (part_index % option->num_threads_ == 0) ?
 			ofstream::out : (ofstream::out | ofstream::app);
-		ofstream ofs(option->output_path_ + std::to_string(rank), mode);
+		ofstream ofs(option->output_path_ + std::to_string(mpi_rank), mode);
 
 		cout << log_header << "min_row_index: " << min_row_index << endl;
 		for(int i = 0; i < local_num_rows; i++){

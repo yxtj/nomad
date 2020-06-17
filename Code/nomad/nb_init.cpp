@@ -32,8 +32,8 @@ bool NomadBody::initial_mpi(){
 	}
 
 	// retrieve MPI task info
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
+	MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
 	MPI_Get_processor_name(hostname, &hostname_len);
 	return true;
 }
@@ -78,12 +78,12 @@ void NomadBody::initial_data4machine(){
 
 void NomadBody::initial_net_data(){
 	// array used to remember the sizes of send_queue in each machine
-	queue_current_sizes = callocator<atomic<int> >().allocate(numtasks);
-	for(int i = 0; i < numtasks; i++){
+	queue_current_sizes = callocator<atomic<int> >().allocate(mpi_size);
+	for(int i = 0; i < mpi_size; i++){
 		queue_current_sizes[i] = 0;
 	}
 	// we try to bound the size of send_queue's by this number
-	queue_upperbound = global_num_cols * 4 / numtasks;
+	queue_upperbound = global_num_cols * 4 / mpi_size;
 
 	// define constants needed for network communication
 	// col_index + vector
@@ -103,11 +103,11 @@ void NomadBody::initial_cp(){
 	cp_received_clear_counter = 0;
 	//received_flush.resize(option->num_threads_, vector<bool>(num_parts, false));
 	cp_need_archive_msg_from.resize(option->num_threads_);
-	cp_need_archive_msg_counter = callocator<atomic<int>>().allocate(numtasks);
+	cp_need_archive_msg_counter = callocator<atomic<int>>().allocate(mpi_size);
 	for(int i = 0; i < option->num_threads_; ++i){
 		cp_need_archive_msg_counter = 0;
-		cp_need_archive_msg_from[i] = callocator<atomic<bool>>().allocate(numtasks);
-		for(int j = 0; j < numtasks; ++j)
+		cp_need_archive_msg_from[i] = callocator<atomic<bool>>().allocate(mpi_size);
+		for(int j = 0; j < mpi_size; ++j)
 			cp_need_archive_msg_from[i][j] = false;
 	}
 	//count_recv_flush.resize(option->num_threads_, 0);
@@ -132,10 +132,10 @@ bool NomadBody::initial(NomadOption* opt){
 	option = opt;
 	if(!initial_mpi())
 		return false;
-	log_header = "W" + to_string(rank) + ": ";
-	cout << log_header << boost::format("processor name: %s, number of tasks: %d, rank: %d") % hostname % numtasks % rank << endl;
+	log_header = "W" + to_string(mpi_rank) + ": ";
+	cout << log_header << boost::format("processor name: %s, number of tasks: %d, rank: %d") % hostname % mpi_size % mpi_rank << endl;
 
-	num_parts = numtasks * option->num_threads_;
+	num_parts = mpi_size * option->num_threads_;
 
 	cout << log_header << "number of threads: " << option->num_threads_ << ", number of parts: " << num_parts << endl;
 
@@ -158,7 +158,7 @@ bool NomadBody::initial(NomadOption* opt){
 
 	// distribution used to initialize parameters
 	// distribution is taken from Hsiang-Fu's implementation of DSGD
-	rng = mt19937_64(option->seed_ + rank * 131 + 139);
+	rng = mt19937_64(option->seed_ + mpi_rank * 131 + 139);
 
 	// these arrays will be used to calculate test error
 	// each thread will calculate test error on its own, and the results will be aggregated
@@ -170,10 +170,10 @@ bool NomadBody::initial(NomadOption* opt){
 	train_col_error.assign(global_num_cols, 0.0);
 	train_col_error_sum = 0.0;
 
-	local_error_ready = callocator<atomic<bool> >().allocate(numtasks);
-	for(int i = 0; i < numtasks; ++i)
+	local_error_ready = callocator<atomic<bool> >().allocate(mpi_size);
+	for(int i = 0; i < mpi_size; ++i)
 		local_error_ready[i] = false;
-	local_error_received.assign(numtasks, 0.0);
+	local_error_received.assign(mpi_size, 0.0);
 
 	initial_cp();
 	initial_net_control();
