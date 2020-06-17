@@ -22,21 +22,10 @@ using namespace std;
 /////////////////////////////////////////////////////////
 // Define Basic Checkpoint functions
 /////////////////////////////////////////////////////////
-void NomadBody::_send_clear_signal(int thread_index, bool send2self, bool direct_send)
+void NomadBody::_send_clear_signal(bool send2self, bool direct_send)
 {
-	int part_index = rank * option->num_threads_ + thread_index;
-	// send clear signal part 1 (same MPI instance):
-	for(int i = 0; i < option->num_threads_; ++i){
-		if(!send2self && i == thread_index)
-			continue;
-		ColumnData* p = column_pool->pop();
-		p->col_index_ = ColumnData::SIGNAL_CP_CLEAR;
-		p->pos_ = part_index;
-		job_queues[i].push(p);
-	}
-	// send clear signal part 2 (other MPI instance):
 	if(direct_send){
-		int source = part_index;	//set source part_index
+		int source = rank;
 		for(int target_rank = 0; target_rank < numtasks; ++target_rank){
 			if(target_rank == rank)
 				continue;
@@ -49,7 +38,7 @@ void NomadBody::_send_clear_signal(int thread_index, bool send2self, bool direct
 	} else{
 		ColumnData* p_col = column_pool->pop();
 		p_col->col_index_ = ColumnData::SIGNAL_CP_CLEAR; //set message type
-		p_col->pos_ = part_index; // set source
+		p_col->pos_ = rank; // set source
 		send_queue.push(p_col);
 	}
 }
@@ -118,7 +107,7 @@ void NomadBody::archive_local(int thread_index, double* latent_rows, int local_n
 	cp_write_time[thread_index] += (tbb::tick_count::now() - t0).seconds();
 }
 
-void NomadBody::archive_msg_queue(int thread_index, const string& suffix, colque& queue, bool locked)
+void NomadBody::_archive_msg_queue(int thread_index, const string& suffix, colque& queue, bool locked)
 {
 	tick_count t0 = tbb::tick_count::now();
 	int part_index = rank * option->num_threads_ + thread_index;
@@ -147,16 +136,25 @@ void NomadBody::archive_msg_queue(int thread_index, const string& suffix, colque
 	cp_write_time[thread_index] += (tbb::tick_count::now() - t0).seconds();
 }
 
+void NomadBody::arhive_job_queue(int thread_index, bool locked)
+{
+	_archive_msg_queue(thread_index, ".msg", job_queues[thread_index], locked);
+}
+
+void NomadBody::arhive_send_queue(bool locked)
+{
+	_archive_msg_queue(0, ".smsg", send_queue, locked);
+}
+
 void NomadBody::archive_msg_queue_all(bool locked)
 {
 	tick_count t0 = tbb::tick_count::now();
 	// each job queue
 	for(int thread_index = 0; thread_index < option->num_threads_; ++thread_index){
-		int part_index = rank * option->num_threads_ + thread_index;
-		archive_msg_queue(thread_index, ".msg", job_queues[thread_index], locked);
+		arhive_job_queue(thread_index);
 	}
 	// send queue
-	archive_msg_queue(0, ".smsg", send_queue, locked);
+	arhive_send_queue();
 	cp_write_time[0] += (tbb::tick_count::now() - t0).seconds();
 
 }
@@ -249,7 +247,7 @@ void NomadBody::_send_sig2threads_resume(int epoch)
 	}
 }
 
-void NomadBody::_wait_all_update_thread()
+void NomadBody::_sync_all_update_thread()
 {
 	++cp_ut_wait_counter;
 	while(cp_ut_wait_counter < option->num_threads_){
@@ -265,14 +263,13 @@ void NomadBody::cp_shm_start(int epoch)
 		allow_sending = false;
 		allow_processing = false;
 		for(int i = 0; i < option->num_threads_; ++i){
-			allow_processing_thread[i] = false;
 			cp_action_ready[i] = true;
 		}
 	}else if(option->cp_type_ == "async"){
 		_send_sig2threads_start(epoch);
 	}else if(option->cp_type_ == "vs"){
 		allow_sending = false;
-		_send_sig2threads_start(epoch);
+		_send_clear_signal(true, true);
 	} else{
 
 	}
@@ -285,7 +282,13 @@ void NomadBody::cp_shm_clear(int source)
 	} else if(option->cp_type_ == "async"){
 		_send_sig2threads_clear(source);
 	} else if(option->cp_type_ == "vs"){
-		_send_sig2threads_clear(source);
+		++cp_received_clear_counter;
+		if(cp_received_clear_counter == numtasks){
+			// temporarily stop processing to sablize the send_queue
+			allow_processing = false;
+			for(int i = 0; i < option->num_threads_; ++i)
+				cp_action_ready[i] = true;
+		}
 	} else{
 
 	}
@@ -296,16 +299,12 @@ void NomadBody::cp_shm_resume(int epoch)
 	if(option->cp_type_ == "sync"){
 		archive_msg_queue_all();
 		allow_processing = true;
-		for(int i = 0; i < option->num_threads_; ++i){
-			allow_processing_thread[i] = true;
-		}
 		allow_sending = true;
 	} else if(option->cp_type_ == "async"){
 		_send_sig2threads_resume(epoch);
 	} else if(option->cp_type_ == "vs"){
 		allow_sending = true;
-		for(int i = 0; i < option->num_threads_; ++i)
-			cp_received_clear_counters[i] = 0;
+		cp_received_clear_counter = 0;
 	} else{
 
 	}
@@ -321,10 +320,9 @@ void NomadBody::cp_sht_start(int thread_index, int part_index, int epoch, double
 	} else if(option->cp_type_ == "async"){
 
 	} else if(option->cp_type_ == "vs"){
-		++cp_received_clear_counters[thread_index];
-		_send_clear_signal(thread_index, false, true);
+		_send_clear_signal(false, true);
 	} else{
-
+		// nothing
 	}
 }
 
@@ -335,11 +333,7 @@ void NomadBody::cp_sht_clear(int thread_index, int part_index, int source, doubl
 	} else if(option->cp_type_ == "async"){
 
 	} else if(option->cp_type_ == "vs"){
-		++cp_received_clear_counters[thread_index];
-		if(cp_received_clear_counters[thread_index] == num_parts){
-			archive_local(thread_index, latent_rows, local_num_rows);
-			archive_msg_queue(thread_index, ".msg", job_queues[thread_index], false);
-		}
+		// nothing
 	} else{
 
 	}
@@ -361,15 +355,27 @@ void NomadBody::cp_sht_resume(int thread_index, int part_index, int epoch)
 void NomadBody::cp_update_func_action(int thread_index, int part_index, double* latent_rows, int local_num_rows)
 {
 	if(option->cp_type_ == "sync"){
-		_wait_all_update_thread();
+		// triggered by start signal
+		_sync_all_update_thread();
 		archive_local(thread_index, latent_rows, local_num_rows);
+		// message queues are not stable now
 		if(thread_index == 0){
 			_send_lfinish_signal();
 		}
 	} else if(option->cp_type_ == "async"){
 
 	} else if(option->cp_type_ == "vs"){
-
+		// triggered by the last clear singal
+		_sync_all_update_thread();
+		archive_local(thread_index, latent_rows, local_num_rows);
+		arhive_job_queue(thread_index);
+		// message queues are stable now
+		if(thread_index == 0){
+			arhive_send_queue();
+			// resume processing
+			allow_processing = true;
+			_send_lfinish_signal();
+		}
 	} else{
 
 	}
@@ -390,7 +396,7 @@ void NomadBody::signal_handler_start(int thread_index, ColumnData* p_col, double
 	}
 	// archive state
 	archive_local(thread_index, latent_rows, local_num_rows);
-	_send_clear_signal(thread_index, true, false);
+	_send_clear_signal(true, false);
 	//cerr<<"send flush signal from "<<part_index<<endl;
 	//cerr<<thread_index<<" queue-len : "<<job_queues[thread_index].unsafe_size()<<endl;
 }

@@ -100,9 +100,7 @@ void NomadBody::initial_cp(){
 	cp_epoch = -1;
 	cp_ut_wait_counter = 0;
 	checkpointing.resize(option->num_threads_, false);
-	cp_received_clear_counters = callocator<atomic<int>>().allocate(option->num_threads_);
-	for(int i = 0; i < option->num_threads_; ++i)
-		cp_received_clear_counters[i] = 0;
+	cp_received_clear_counter = 0;
 	received_flush.resize(option->num_threads_, vector<bool>(num_parts, false));
 	count_recv_flush.resize(option->num_threads_, 0);
 	cp_fmsgs.resize(option->num_threads_);

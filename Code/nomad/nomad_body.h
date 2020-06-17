@@ -141,13 +141,13 @@ private:
 	// THE MAIN WORK FOR CHECKPOINT IS DONE IN updater_func() FOR MINIMIZEING THE MODIFICATION
 	bool finished;
 	atomic<int> cp_ut_wait_counter;
-	vector<bool, callocator<bool> > checkpointing;
-	atomic<int>* cp_received_clear_counters;
+	vector<bool> checkpointing;
+	atomic<bool>* cp_action_ready; // for each thread
+	atomic<int> cp_received_clear_counter;
 	vector<int, callocator<int> > count_recv_flush;
 	vector<vector<bool>, callocator<vector<bool> > > received_flush;
 	int cp_epoch;
 	string cp_folder;
-	atomic<bool>* cp_action_ready;
 
 	vector<long long, callocator<long long> > msg_archived;
 	vector<double, callocator<double> > cp_write_time;
@@ -220,15 +220,17 @@ private:
 	/////////////////////////////////////////////////////////
 	// Define Checkpoint functions
 	/////////////////////////////////////////////////////////
-	void _send_clear_signal(int thread_index, bool send2self, bool direct_send);
+	void _send_clear_signal(bool send2self, bool direct_send);
 	void _send_lfinish_signal();
 	string gen_cp_file_name(int part_index);
 
 	bool start_cp(int thread_index, int epoch);
 	void archive_local(int thread_index, double* latent_rows, int local_num_rows);
-	void archive_msg(int thread_index, ColumnData* p_col);
-	void archive_msg_queue(int thread_index, const string& suffix, colque& queue, bool locked = true);
+	void _archive_msg_queue(int thread_index, const string& suffix, colque& queue, bool locked = true);
+	void arhive_job_queue(int thread_index, bool locked = true);
+	void arhive_send_queue(bool locked = true);
 	void archive_msg_queue_all(bool locked = true);
+	void archive_msg(int thread_index, ColumnData* p_col);
 	void finish_cp(int thread_index);
 
 	void restore_local(const string& cp_f, int part_index, double* latent_rows, int& local_num_rows, int& dim);
@@ -238,7 +240,7 @@ private:
 	void _send_sig2threads_start(int epoch);
 	void _send_sig2threads_clear(int source); // source rank
 	void _send_sig2threads_resume(int epoch);
-	void _wait_all_update_thread();
+	void _sync_all_update_thread();
 
 	// signal handler - machine (MPI instance) level
 	void cp_shm_start(int epoch);
@@ -250,6 +252,7 @@ private:
 	void cp_sht_clear(int thread_index, int part_index, int source, double* latent_rows, int local_num_rows);
 	void cp_sht_resume(int thread_index, int part_index, int epoch);
 
+	// only execute once
 	void cp_update_func_action(int thread_index, int part_index, double* latent_rows, int local_num_rows);
 
 	void signal_handler_start(int thread_index, ColumnData* p_col, double* latent_rows, int local_num_rows);
