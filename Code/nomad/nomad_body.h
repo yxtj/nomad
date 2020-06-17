@@ -92,6 +92,8 @@ private:
 	colque* job_queues;
 	// a queue of columns to be sent to other machines via network
 	colque send_queue;
+	// a queue of special signal, messages in this queue is sent even when allow_sending==false
+	tbb::concurrent_queue<std::pair<int, int>> send_queue_force;
 	// save columns here, and push to job_queues again before next train starts
 	vector<ColumnData*, sallocator<ColumnData*> > saved_columns;
 

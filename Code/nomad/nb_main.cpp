@@ -31,25 +31,6 @@ using nomad::MsgType;
 
 
 /////////////////////////////////////////////////////////
-// Define message sending function
-/////////////////////////////////////////////////////////
-void NomadBody::_send_msg(char* send_message, const int cur_num, const int target_rank){
-	*(reinterpret_cast<int*>(send_message)) = static_cast<int>(send_queue.unsafe_size());
-	*(reinterpret_cast<int*>(send_message) + 1) = cur_num;
-	//tbb::tick_count t = tbb::tick_count::now();
-	int rc = MPI_Ssend(send_message, msg_bytenum, MPI_CHAR, target_rank, MsgType::DATA, MPI_COMM_WORLD);
-	if(rc != MPI_SUCCESS){
-		std::cerr << "SendTask MPI Error" << std::endl;
-		exit(64);
-	}
-
-	//do_net_control_ratio(msg_bytenum, tbb::tick_count::now() - t);
-
-	local_send_count += cur_num;
-}
-
-
-/////////////////////////////////////////////////////////
 // Define main running function
 /////////////////////////////////////////////////////////
 int NomadBody::run(NomadOption* opt){

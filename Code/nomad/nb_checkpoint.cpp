@@ -11,12 +11,6 @@
 #include <boost/filesystem.hpp>
 #include <boost/format.hpp>
 
-#include <mpi.h>
-#if defined(WIN32) || defined(_WIN32)
-#undef min
-#undef max
-#endif // WIN32
-
 using namespace std;
 
 /////////////////////////////////////////////////////////
@@ -27,13 +21,10 @@ void NomadBody::_send_clear_signal(bool send2self, bool direct_send)
 	if(direct_send){
 		int source = rank;
 		for(int target_rank = 0; target_rank < numtasks; ++target_rank){
-			if(target_rank == rank)
+			// including itself
+			if(!send2self && target_rank == rank)
 				continue;
-			int rc = MPI_Ssend(reinterpret_cast<void*>(&source), sizeof(source), MPI_CHAR, target_rank, MsgType::CP_CLEAR, MPI_COMM_WORLD);
-			if(rc != MPI_SUCCESS){
-				std::cerr << "SendTask MPI Error" << std::endl;
-				exit(64);
-			}
+			send_queue_force.emplace(ColumnData::SIGNAL_CP_CLEAR, target_rank);
 		}
 	} else{
 		ColumnData* p_col = column_pool->pop();
@@ -45,14 +36,7 @@ void NomadBody::_send_clear_signal(bool send2self, bool direct_send)
 
 void NomadBody::_send_lfinish_signal()
 {
-	int data[2];
-	data[0] = rank;
-	data[1] = cp_epoch;
-	int rc = MPI_Ssend(reinterpret_cast<char*>(data), sizeof(data), MPI_CHAR, 0, MsgType::CP_LFINISH, MPI_COMM_WORLD);
-	if(rc != MPI_SUCCESS){
-		std::cerr << "SendTask MPI Error" << std::endl;
-		exit(64);
-	}
+	send_queue_force.emplace(ColumnData::SIGNAL_CP_LFINISH, cp_epoch);
 }
 
 string NomadBody::gen_cp_file_name(int part_index)

@@ -21,6 +21,25 @@
 
 using namespace std;
 
+
+/////////////////////////////////////////////////////////
+// Define message sending function
+/////////////////////////////////////////////////////////
+void NomadBody::_send_msg(char* send_message, const int cur_num, const int target_rank){
+	*(reinterpret_cast<int*>(send_message)) = static_cast<int>(send_queue.unsafe_size());
+	*(reinterpret_cast<int*>(send_message) + 1) = cur_num;
+	//tbb::tick_count t = tbb::tick_count::now();
+	int rc = MPI_Ssend(send_message, msg_bytenum, MPI_CHAR, target_rank, MsgType::DATA, MPI_COMM_WORLD);
+	if(rc != MPI_SUCCESS){
+		std::cerr << "SendTask MPI Error" << std::endl;
+		exit(64);
+	}
+
+	//do_net_control_ratio(msg_bytenum, tbb::tick_count::now() - t);
+
+	local_send_count += cur_num;
+}
+
 /////////////////////////////////////////////////////////
 // Define Training Sender Thread
 /////////////////////////////////////////////////////////
@@ -42,6 +61,8 @@ void NomadBody::train_send_func(const double timeout){
 	char* cur_pos = send_message + sizeof(int) + sizeof(int);
 	int cur_num = 0;
 
+	pair<int, int> force_sent_signal;
+
 	// Buffer some columns for one message. (# column>UNITS_PER_MSG || wait time>timeout)
 	while(true){
 
@@ -55,6 +76,26 @@ void NomadBody::train_send_func(const double timeout){
 		//			<< send_queue.unsafe_size() << ",endline" << endl;
 		//	monitor_num++;
 		//}
+
+		if(send_queue_force.try_pop(force_sent_signal)){
+			if(force_sent_signal.first == ColumnData::SIGNAL_CP_START){
+				int epoch = force_sent_signal.second;
+				for(int i = 0; i < numtasks; ++i)
+					MPI_Ssend(reinterpret_cast<char*>(&epoch), sizeof(epoch), MPI_CHAR, i, MsgType::CP_START, MPI_COMM_WORLD);
+			}else if(force_sent_signal.first == ColumnData::SIGNAL_CP_CLEAR){
+				int source = rank;
+				int target_rank = force_sent_signal.second;
+				MPI_Ssend(reinterpret_cast<void*>(&source), sizeof(source), MPI_CHAR, target_rank, MsgType::CP_CLEAR, MPI_COMM_WORLD);
+			}else if(force_sent_signal.first == ColumnData::SIGNAL_CP_LFINISH){
+				int epoch = force_sent_signal.second;
+				MPI_Ssend(reinterpret_cast<void*>(&epoch), sizeof(epoch), MPI_CHAR, 0, MsgType::CP_LFINISH, MPI_COMM_WORLD);
+			} else if(force_sent_signal.first == ColumnData::SIGNAL_CP_RESUME){
+				int epoch = force_sent_signal.second;
+				for(int i = 0; i < numtasks; ++i)
+					MPI_Ssend(reinterpret_cast<char*>(&epoch), sizeof(epoch), MPI_CHAR, i, MsgType::CP_RESUME, MPI_COMM_WORLD);
+			}
+			continue;
+		}
 
 		ColumnData* p_col = nullptr;
 
@@ -73,8 +114,7 @@ void NomadBody::train_send_func(const double timeout){
 				//send clear signal
 				*reinterpret_cast<int*>(send_message) = p_col->pos_;	//set source rank
 				for(int target_rank = 0; target_rank < numtasks; ++target_rank){
-					if(target_rank == rank)
-						continue;
+					// including itself
 					int rc = MPI_Ssend(send_message, sizeof(int), MPI_CHAR, target_rank, MsgType::CP_CLEAR, MPI_COMM_WORLD);
 					if(rc != MPI_SUCCESS){
 						std::cerr << "SendTask MPI Error" << std::endl;
@@ -203,7 +243,7 @@ void NomadBody::train_recv_func(){
 					// generate permutation
 					p_col->set_perm(option->num_threads_, rng);
 
-					job_queues[p_col->perm_[p_col->pos_]].push(p_col);
+					job_queues[p_col->perm_[0]].push(p_col);
 					cur_pos += unit_bytenum;
 				}
 			}
