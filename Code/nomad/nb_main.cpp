@@ -382,6 +382,8 @@ int NomadBody::run(NomadOption* opt){
 	callocator<int>().deallocate(test_count_errors, option->num_threads_);
 	callocator<double>().deallocate(test_sum_errors, option->num_threads_);
 
+	train_col_error.clear();
+
 	callocator<atomic<bool> >().deallocate(is_column_empty, global_num_cols);
 
 	callocator<atomic<int> >().deallocate(queue_current_sizes, numtasks);
@@ -402,6 +404,45 @@ int NomadBody::run(NomadOption* opt){
 
 	return 0;
 
+}
+
+/////////////////////////////////////////////////////////
+// Define Master Termination Check Thread
+/////////////////////////////////////////////////////////
+void NomadBody::master_termcheck()
+{
+	double diff = numeric_limits<double>::infinity();
+	while(diff > option->min_error){
+		std::unique_lock<std::mutex> lk(tm_m);
+		while(any_of(local_error_ready, local_error_ready + numtasks,
+			[](const atomic<bool>& b){return !b.load(); }))
+		{
+			tm_cv.wait(lk, [&](){
+				return all_of(local_error_ready, local_error_ready + numtasks,
+					[](const atomic<bool>& b){return b.load(); });
+				});
+		}
+		for(int i = 0; i < numtasks; ++i)
+			local_error_ready[i] = false;
+		double sum = accumulate(local_error_received.begin(), local_error_received.end(), 0.0);
+		diff = abs(sum - global_error);
+		cout << "M: termination check at " << 0 << " last error: " << global_error << " new error: " << sum << " difference: " << diff << endl;
+		global_error = sum;
+	}
+	cout << "M: send terimination signal" << endl;
+	send_queue_force.emplace(ColumnData::SIGNAL_TERMINATE, tm_count);
+}
+
+void NomadBody::sh_m_lerror(int source, double error)
+{
+	std::unique_lock<std::mutex> lk(tm_m);
+	local_error_received[source] = error;
+	local_error_ready[source] = true;
+	if(all_of(local_error_ready, local_error_ready + numtasks,
+		[](const atomic<bool>& b){return b.load(); }))
+	{
+		tm_cv.notify_all();
+	}
 }
 
 /////////////////////////////////////////////////////////
@@ -539,6 +580,8 @@ void NomadBody::updater_func(int thread_index){
 
 					// calculate error
 					double cur_error = std::inner_product(col, col + dim, row, -train_row_val[offset]);
+					// accumulate error
+					train_col_error[p_col->col_index_] += cur_error * cur_error;
 
 					// update both row and column
 					for(int i = 0; i < dim; i++){

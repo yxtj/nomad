@@ -37,10 +37,13 @@ public:
 	static constexpr int SIGNAL_CP_CLEAR = -2;
 	static constexpr int SIGNAL_CP_LFINISH = -3;
 	static constexpr int SIGNAL_CP_RESUME = -4;
+	static constexpr int SIGNAL_LERROR = -5;
+	static constexpr int SIGNAL_TERMINATE = -6;
 
 public:
 	int col_index_; // its negative value is re-used as special signals
 	long flag_;
+	double error; // used for online termination check
 	int source_; //set by receiver as MPI rank
 	int *perm_;
 	int pos_; // re-used as second parameter when col_index_ is negative
@@ -103,6 +106,7 @@ public:
 	ColumnData *allocate(){
 
 		ColumnData *ret = alloc_.allocate(1);
+		ret->error = 0.0;
 		ret->perm_ = int_alloc_.allocate(num_threads_);
 		ret->values_ = scalar_alloc_.allocate(dim_);
 		return ret;

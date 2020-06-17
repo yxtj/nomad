@@ -81,7 +81,7 @@ private:
 
 	int num_parts;
 	int global_num_cols;
-	rng_type rng;
+	std::mt19937_64 rng;
 
 	// create a column pool with big enough size
 	// this serves as a memory pool.
@@ -131,6 +131,11 @@ private:
 	int* test_count_errors;
 	double* test_sum_errors;
 
+	// online MSRE computation. local sum error for each column
+	vector<double, callocator<double>> train_col_error;
+	// online MSRE computation. incrementally updated in recv_thread and send_thread
+	double train_col_error_sum;
+
 	// define constants needed for network communication
 	// col_index + vector
 	int unit_bytenum;	//const
@@ -157,11 +162,19 @@ private:
 	vector<double, callocator<double> > cp_write_time;
 	vector<std::ofstream*> cp_fmsgs;
 
-	// for master
+	// master - checkpoint
 	int cp_master_epoch;
 	std::mutex cp_m;
 	std::condition_variable cp_cv;
 	atomic<int> cp_master_lfinish_count;
+
+	// master - termination check
+	int tm_count;
+	double global_error;
+	std::mutex tm_m;
+	std::condition_variable tm_cv;
+	vector<double, callocator<double>> local_error_received;
+	atomic<bool>* local_error_ready;
 
 	// network control
 	bool control_net_delay;
@@ -193,6 +206,9 @@ private:
 	// Define Master Thread
 	/////////////////////////////////////////////////////////
 	void master_func();
+	void master_checkpoint();
+	void master_termcheck();
+	void sh_m_lerror(int source, double error);
 	void cp_sh_m_lfinish(int source_part);
 
 	/////////////////////////////////////////////////////////

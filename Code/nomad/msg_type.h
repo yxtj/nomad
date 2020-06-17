@@ -17,6 +17,8 @@ namespace nomad{
 		CP_LFINISH = 4,
 		CP_RESUME = 5,
 		CP_RESTORE = 6,
+		LOCAL_ERROR = 7,
+		TERMINATION = 10,
 	};
 
 } // namespace nomad

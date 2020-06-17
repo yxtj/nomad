@@ -35,6 +35,7 @@ struct NomadOption {
 	unsigned long long seed_;
 	int latent_dimension_;
 	std::vector<double> timeouts_;
+	double min_error;
 	//int pipeline_token_num_;
 	int num_reuse_;
 	bool flag_pause_;

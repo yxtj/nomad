@@ -74,6 +74,8 @@ bool NomadOption::parse_command(int& argc, char**& argv) {
 		("timeout,t",
 			value<vector<double> >(&timeouts_)->multitoken()->default_value(vector<double>(1, 10.0), "10.0"),
 			"timeout seconds until completion")
+		("error,e", value<double>(&min_error)->default_value(1e-4, "0.0001"),
+			"the minimal error to stop")
 		//("ptoken,p", value<int>(&pipeline_token_num_)->default_value(1024),
 		//	"number of tokens in the pipeline")
 		("dim", value<int>(&latent_dimension_)->default_value(100),

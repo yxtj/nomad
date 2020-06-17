@@ -167,6 +167,14 @@ bool NomadBody::initial(NomadOption* opt){
 	test_count_errors = callocator<int>().allocate(option->num_threads_);
 	test_sum_errors = callocator<double>().allocate(option->num_threads_);
 
+	train_col_error.assign(global_num_cols, 0.0);
+	train_col_error_sum = 0.0;
+
+	local_error_ready = callocator<atomic<bool> >().allocate(numtasks);
+	for(int i = 0; i < numtasks; ++i)
+		local_error_ready[i] = false;
+	local_error_received.assign(numtasks, 0.0);
+
 	initial_cp();
 	initial_net_control();
 	allow_sending = true;
