@@ -9,52 +9,6 @@
 
 using namespace std;
 
-void NomadOption::to_lower(std::string& s)
-{
-	for(size_t i = 0; i < s.size(); ++i) {
-		if(s[i] >= 'A' && s[i] <= 'Z')
-			s[i] += 'a' - 'A';
-	}
-}
-
-bool NomadOption::check_ctype()
-{
-	to_lower(cp_type_);
-	static vector<string> valid = { "none","sync","async","vs" };
-	return find(valid.begin(), valid.end(), cp_type_) != valid.end();
-}
-
-bool NomadOption::parse_ratio()
-{
-	to_lower(net_ratio_str);
-	bool flag = true;
-	size_t scale = 1;
-	if(net_ratio_str.size() < 2){
-		flag = false;
-	} else if(net_ratio_str == "inf"){
-		net_ratio = numeric_limits<double>::infinity();
-	} else{
-		if(net_ratio_str.back() == 'k' || net_ratio_str.back() == 'm' || net_ratio_str.back() == 'g'){
-			if(net_ratio_str.back() == 'k')
-				scale = 1000;
-			else if(net_ratio_str.back() == 'm')
-				scale = 1000 * 1000;
-			else
-				scale = 1000 * 1000 * 1000;
-			net_ratio_str = net_ratio_str.substr(0, net_ratio_str.size() - 1);
-		}
-		try{
-			net_ratio = stod(net_ratio_str);
-		} catch(...){
-			flag = false;
-		}
-	}
-	if(flag && scale != 1){
-		net_ratio *= scale;
-	}
-	return flag;
-}
-
 bool NomadOption::parse_command(int& argc, char**& argv) {
 	boost::program_options::options_description option_desc_("nomad options");
 	using boost::program_options::value;
@@ -74,8 +28,12 @@ bool NomadOption::parse_command(int& argc, char**& argv) {
 		("timeout,t",
 			value<vector<double> >(&timeouts_)->multitoken()->default_value(vector<double>(1, 10.0), "10.0"),
 			"timeout seconds until completion")
-		("error,e", value<double>(&min_error)->default_value(1e-4, "0.0001"),
+		("tm_error,e", value<double>(&min_error)->default_value(1e-4, "0.0001"),
 			"the minimal error to stop")
+		("tm_interval", value<double>(&report_interval)->default_value(1),
+			"interval of reporting local error for termination check")
+		("tm_portion", value<double>(&termcheck_min_portion)->default_value(0.01),
+			"min portion of updated columns to do termination check")
 		//("ptoken,p", value<int>(&pipeline_token_num_)->default_value(1024),
 		//	"number of tokens in the pipeline")
 		("dim", value<int>(&latent_dimension_)->default_value(100),
@@ -86,7 +44,7 @@ bool NomadOption::parse_command(int& argc, char**& argv) {
 			"pause for a while after each timeout")
 		("r0delay", value<double>(&rank0_delay_)->default_value(0),
 			"arbitrary network delay added to communication of rank 0 machine")
-		("path,i", value<string>(&path_), "path of data")
+		("input,i", value<string>(&path_), "path of data")
 		("output,o", value<string>(&output_path_)->default_value(""),
 			"path of the file the result will be printed into")
 
@@ -99,9 +57,9 @@ bool NomadOption::parse_command(int& argc, char**& argv) {
 		("cppath,p", value<string>(&cp_path_)->default_value(""),
 			"path to store checkpoint")
 
-		("net-delay", value<double>(&net_delay)->default_value(0),
+		("net_delay", value<double>(&net_delay)->default_value(0),
 			"the additional delay in network control")
-		("net-ratio", value<std::string>(&net_ratio_str)->default_value("inf"),
+		("net_ratio", value<std::string>(&net_ratio_str)->default_value("inf"),
 			"the maximum sending ratio in network control (MB/s)")
 	;
 
@@ -146,7 +104,51 @@ bool NomadOption::parse_command(int& argc, char**& argv) {
 		cerr << option_desc_ << endl;
 		return false;
 	}
-
 	return true;
+}
 
+void NomadOption::to_lower(std::string& s)
+{
+	for(size_t i = 0; i < s.size(); ++i) {
+		if(s[i] >= 'A' && s[i] <= 'Z')
+			s[i] += 'a' - 'A';
+	}
+}
+
+bool NomadOption::check_ctype()
+{
+	to_lower(cp_type_);
+	static vector<string> valid = { "none","sync","async","vs" };
+	return find(valid.begin(), valid.end(), cp_type_) != valid.end();
+}
+
+bool NomadOption::parse_ratio()
+{
+	to_lower(net_ratio_str);
+	bool flag = true;
+	size_t scale = 1;
+	if(net_ratio_str.size() < 2){
+		flag = false;
+	} else if(net_ratio_str == "inf"){
+		net_ratio = numeric_limits<double>::infinity();
+	} else{
+		if(net_ratio_str.back() == 'k' || net_ratio_str.back() == 'm' || net_ratio_str.back() == 'g'){
+			if(net_ratio_str.back() == 'k')
+				scale = 1000;
+			else if(net_ratio_str.back() == 'm')
+				scale = 1000 * 1000;
+			else
+				scale = 1000 * 1000 * 1000;
+			net_ratio_str = net_ratio_str.substr(0, net_ratio_str.size() - 1);
+		}
+		try{
+			net_ratio = stod(net_ratio_str);
+		} catch(...){
+			flag = false;
+		}
+	}
+	if(flag && scale != 1){
+		net_ratio *= scale;
+	}
+	return flag;
 }

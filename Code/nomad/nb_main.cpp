@@ -62,9 +62,13 @@ int NomadBody::run(NomadOption* opt){
 	//std::mutex print_mutex;
 	//std::condition_variable print_waiter;
 
-	std::thread* master_thread = nullptr;
-	if(mpi_rank == 0 && option->cp_type_ != "none"){
-		master_thread = new std::thread(std::bind(&NomadBody::master_func, this));
+	std::thread* master_cp_thread = nullptr;
+	std::thread* master_tm_thread = nullptr;
+	if(mpi_rank == 0){
+		if(option->cp_type_ != "none"){
+			master_cp_thread = new std::thread(std::bind(&NomadBody::master_checkpoint, this));
+		}
+		master_tm_thread = new std::thread(std::bind(&NomadBody::master_termcheck, this));
 	}
 
 	wait_number = 0;
@@ -238,11 +242,9 @@ int NomadBody::run(NomadOption* opt){
 		double machine_test_sum_error = std::accumulate(test_sum_errors, test_sum_errors + option->num_threads_, 0.0);
 
 		int global_train_count_error = 0;
-		MPI_Allreduce(&machine_train_count_error, &global_train_count_error, 1, MPI_INT,
-			MPI_SUM, MPI_COMM_WORLD);
+		MPI_Allreduce(&machine_train_count_error, &global_train_count_error, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 		int global_test_count_error = 0;
-		MPI_Allreduce(&machine_test_count_error, &global_test_count_error, 1, MPI_INT,
-			MPI_SUM, MPI_COMM_WORLD);
+		MPI_Allreduce(&machine_test_count_error, &global_test_count_error, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
 		double global_train_sum_error = 0.0;
 		MPI_Allreduce(&machine_train_sum_error, &global_train_sum_error, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
@@ -258,16 +260,6 @@ int NomadBody::run(NomadOption* opt){
 		long long global_send_count = 0;
 		MPI_Allreduce(&local_send_count, &global_send_count, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
 
-		int machine_col_empty = 0;
-		for(int i = 0; i < global_num_cols; i++){
-			if(is_column_empty[i]){
-				machine_col_empty++;
-			}
-		}
-
-		int global_col_empty = 0;
-		MPI_Allreduce(&machine_col_empty, &global_col_empty, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-
 		MPI_Barrier(MPI_COMM_WORLD);
 
 		if(mpi_rank == 0){
@@ -282,9 +274,8 @@ int NomadBody::run(NomadOption* opt){
 				<< option->timeouts_[main_timeout_iter] << "," << global_num_updates << ","
 				<< sqrt(global_test_sum_error / global_test_count_error)
 				<< "," << global_test_sum_error << "," << global_test_count_error
-				<< "," << global_num_failures << "," << global_col_empty
-				<< "," << global_send_count << ","
-				<< sqrt(global_train_sum_error / global_train_count_error)
+				<< "," << global_num_failures << "," << global_send_count
+				<< "," << sqrt(global_train_sum_error / global_train_count_error)
 				<< "," << global_train_sum_error << "," << global_train_count_error
 				<< endl;
 			cout << log_header << "=====================================================" << endl;
@@ -325,9 +316,14 @@ int NomadBody::run(NomadOption* opt){
 
 	finished = true;
 	cp_cv.notify_all();
-	if(master_thread && master_thread->joinable()){
-		master_thread->join();
-		delete master_thread;
+	if(master_cp_thread && master_cp_thread->joinable()){
+		master_cp_thread->join();
+		delete master_cp_thread;
+	}
+	tm_cv.notify_all();
+	if(master_tm_thread && master_tm_thread->joinable()){
+		master_tm_thread->join();
+		delete master_tm_thread;
 	}
 
 	cout << log_header << "Waiting for updater threads to join" << endl;
@@ -382,21 +378,21 @@ int NomadBody::run(NomadOption* opt){
 	callocator<int>().deallocate(test_count_errors, option->num_threads_);
 	callocator<double>().deallocate(test_sum_errors, option->num_threads_);
 
-	train_col_error.clear();
-
-	callocator<atomic<bool> >().deallocate(is_column_empty, global_num_cols);
+	tm_col_error.clear();
 
 	callocator<atomic<int> >().deallocate(queue_current_sizes, mpi_size);
 
 	callocator<atomic<bool> >().deallocate(allow_processing_thread, option->num_threads_);
 
 	// cp part
+	if(mpi_rank == 0){
+		callocator<atomic<bool> >().deallocate(tm_local_error_ready, mpi_size);
+	}
 	callocator<atomic<bool> >().deallocate(cp_action_ready, option->num_threads_);
 	for(int i = 0; i < mpi_size; ++i){
 		callocator<atomic<bool> >().deallocate(cp_need_archive_msg_from[i], mpi_size);
 	}
 	callocator<atomic<int> >().deallocate(cp_need_archive_msg_counter, option->num_threads_);
-	
 
 	delete column_pool;
 
@@ -407,43 +403,87 @@ int NomadBody::run(NomadOption* opt){
 }
 
 /////////////////////////////////////////////////////////
-// Define Master Termination Check Thread
+// Define Master Functions
 /////////////////////////////////////////////////////////
+void NomadBody::start_master()
+{
+
+}
+
 void NomadBody::master_termcheck()
 {
+	tbb::tick_count start_time = tbb::tick_count::now();
 	double diff = numeric_limits<double>::infinity();
-	while(diff > option->min_error){
+	while(!finished && diff > option->min_error){
 		std::unique_lock<std::mutex> lk(tm_m);
-		while(any_of(local_error_ready, local_error_ready + mpi_size,
-			[](const atomic<bool>& b){return !b.load(); }))
-		{
-			tm_cv.wait(lk, [&](){
-				return all_of(local_error_ready, local_error_ready + mpi_size,
-					[](const atomic<bool>& b){return b.load(); });
-				});
-		}
+		tm_cv.wait(lk);
+		if(finished)
+			break;
 		for(int i = 0; i < mpi_size; ++i)
-			local_error_ready[i] = false;
-		double sum = accumulate(local_error_received.begin(), local_error_received.end(), 0.0);
+			tm_local_error_ready[i] = false;
+		long long tm_local_update_count_sum_new = accumulate(tm_local_update_count.begin(), tm_local_update_count.end(), 0ll);
+		if(tm_local_update_count_sum_new - tm_local_update_count_sum_last < tm_min_updated_col)
+			continue;
+		tm_local_update_count_sum_last = tm_local_update_count_sum_new;
+		double sum = accumulate(tm_local_error_received.begin(), tm_local_error_received.end(), 0.0);
 		diff = abs(sum - global_error);
-		cout << "M: termination check at " << 0 << " last error: " << global_error << " new error: " << sum << " difference: " << diff << endl;
+		double time = (tbb::tick_count::now() - start_time).seconds();
+		cout << "M: termination check at " << time
+			<< " last error: " << global_error << " new error: " << sum << " difference: " << diff << endl;
 		global_error = sum;
 	}
 	cout << "M: send terimination signal" << endl;
 	send_queue_force.emplace(ColumnData::SIGNAL_TERMINATE, tm_count);
 }
 
-void NomadBody::sh_m_lerror(int source, double error)
+void NomadBody::sh_m_lerror(int source, double error, long long count)
 {
-	std::unique_lock<std::mutex> lk(tm_m);
-	local_error_received[source] = error;
-	local_error_ready[source] = true;
-	if(all_of(local_error_ready, local_error_ready + mpi_size,
-		[](const atomic<bool>& b){return b.load(); }))
+	{
+		std::unique_lock<std::mutex> lk(tm_m);
+		tm_local_error_received[source] = error;
+		tm_local_error_ready[source] = true;
+		tm_local_update_count[source] = count;
+	}
+	if(all_of(tm_local_error_ready, tm_local_error_ready + mpi_size,
+		[](const atomic<bool>& b){ return b.load(); }))
 	{
 		tm_cv.notify_all();
 	}
 }
+
+void NomadBody::master_checkpoint(){
+	cout << "M: start checkpoint thread" << endl;
+	std::unique_lock<std::mutex> lk(cp_m);
+	tick_count last_cptime = tbb::tick_count::now();
+	std::chrono::duration<double> cp_interval(option->cp_interval_);
+	while(!finished){
+		bool btm = cp_cv.wait_for(lk, cp_interval, [&](){
+			return (tbb::tick_count::now() - last_cptime).seconds() >= option->cp_interval_;
+			});
+		if(!finished && flag_train_ready && !flag_train_stop){
+			if(!btm)
+				continue;
+			cout << "M: sending out checkpoint signal " << cp_master_epoch << endl;
+			send_queue_force.emplace(ColumnData::SIGNAL_CP_START, cp_master_epoch);
+			// wait for local finish
+			while(cp_master_lfinish_count < mpi_size){
+				this_thread::sleep_for(chrono::duration<double>(0.05));
+				//this_thread::yield();
+			}
+			send_queue_force.emplace(ColumnData::SIGNAL_CP_RESUME, cp_master_epoch);
+			// finish
+			cp_master_lfinish_count = 0;
+			cp_master_epoch++;
+			last_cptime = tbb::tick_count::now();
+		}
+	}
+}
+
+void NomadBody::cp_sh_m_lfinish(int source)
+{
+	++cp_master_lfinish_count;
+}
+
 
 /////////////////////////////////////////////////////////
 // Define Updater Thread
@@ -481,19 +521,12 @@ void NomadBody::updater_func(int thread_index){
 	int local_num_rows = dtrain.local_num_rows;
 	int min_row_index = dtrain.min_row_index;
 
-	for(int i = 0; i < global_num_cols; i++){
-		if(train_col_offset[i + 1] > train_col_offset[i]){
-			is_column_empty[i] = true;
-			//is_column_empty[i].compare_and_swap(false, true);
-		}
-	}
-
 	/////////////////////////////////////////////////////////
 	// Initialize Latent Data Structure
 	/////////////////////////////////////////////////////////
 
 	// now assign parameters for rows
-	double* latent_rows = sallocator<double>().allocate(local_num_rows * option->latent_dimension_);
+	double* latent_rows = sallocator<double>().allocate(local_num_rows * (option->latent_dimension_));
 
 	// initialize random number generator
 	mt19937_64 rng(option->seed_ + mpi_rank * 131 + thread_index + 1);
@@ -581,7 +614,7 @@ void NomadBody::updater_func(int thread_index){
 					// calculate error
 					double cur_error = std::inner_product(col, col + dim, row, -train_row_val[offset]);
 					// accumulate error
-					train_col_error[p_col->col_index_] += cur_error * cur_error;
+					tm_col_error[p_col->col_index_] += cur_error * cur_error;
 
 					// update both row and column
 					for(int i = 0; i < dim; i++){
@@ -738,7 +771,6 @@ void NomadBody::updater_func(int thread_index){
 			ofstream::out : (ofstream::out | ofstream::app);
 		ofstream ofs(option->output_path_ + std::to_string(mpi_rank), mode);
 
-		cout << log_header << "min_row_index: " << min_row_index << endl;
 		for(int i = 0; i < local_num_rows; i++){
 			double* row = latent_rows + dim * i;
 			ofs << "row," << (min_row_index + i);

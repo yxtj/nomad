@@ -91,8 +91,8 @@ static bool read_data(const string filename, int part_index, int num_parts,
 	// BUGBUG: this is just for debugging purpose
 	
 	if(show_info){
-		cout << "nrows: " << nrows << ", ncols: " << ncols << ", total_nnz: " << total_nnz << "\n"
-			<< "min_row: " << min_row << ", max_row: " << max_row << "\n"
+		cout << "nrows: " << nrows << ", ncols: " << ncols << ", total_nnz: " << total_nnz << ", "
+			<< "min_row: " << min_row << ", max_row: " << max_row << ", "
 			<< "begin_skip: " << begin_skip << ", nnz: " << nnz << endl;
 	}
 

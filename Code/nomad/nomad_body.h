@@ -112,10 +112,6 @@ private:
 	atomic<long long>* num_updates;
 	// also maintain a number of pop failures from job queue
 	atomic<long long>* num_failures;
-	// used to compute the number of empty columns inside a machine
-	// BUGBUG: right now it does not have any purpose other than computing statistics
-	// we may enhance the efficiency of communication by taking advantage of this information
-	atomic<bool>* is_column_empty;
 
 	// array used to remember the sizes of send_queue in each machine
 	atomic<int>* queue_current_sizes;
@@ -123,7 +119,7 @@ private:
 	int queue_upperbound;	//const
 
 	// updater_func related
-	tbb::atomic<int> wait_number;
+	atomic<int> wait_number;
 	// these arrays will be used to calculate test error
 	// each thread will calculate test error on its own, and the results will be aggregated
 	int* train_count_errors;
@@ -131,10 +127,11 @@ private:
 	int* test_count_errors;
 	double* test_sum_errors;
 
-	// online MSRE computation. local sum error for each column
-	vector<double, callocator<double>> train_col_error;
-	// online MSRE computation. incrementally updated in recv_thread and send_thread
-	double train_col_error_sum;
+	// online termination check (RMSE) on worker part
+	// local sum error for each column
+	vector<double, callocator<double>> tm_col_error;
+	// incrementally updated in recv_thread and send_thread
+	double tm_col_error_sum;
 
 	// define constants needed for network communication
 	// col_index + vector
@@ -173,8 +170,12 @@ private:
 	double global_error;
 	std::mutex tm_m;
 	std::condition_variable tm_cv;
-	vector<double, callocator<double>> local_error_received;
-	atomic<bool>* local_error_ready;
+	vector<double, callocator<double>> tm_local_error_received;
+	atomic<bool>* tm_local_error_ready;
+	int tm_min_updated_col;
+	// number of updated column on each mpi instance
+	vector<long long, callocator<double>> tm_local_update_count;
+	long long tm_local_update_count_sum_last;
 
 	// network control
 	bool control_net_delay;
@@ -195,6 +196,7 @@ private:
 	void initial_data4thread();
 	void initial_data4machine();
 	void initial_net_data();
+	void initial_termcheck();
 	void initial_cp();
 	void initial_net_control();
 	bool initial(NomadOption* opt);
@@ -205,10 +207,11 @@ private:
 	/////////////////////////////////////////////////////////
 	// Define Master Thread
 	/////////////////////////////////////////////////////////
-	void master_func();
+	void start_master();
+	void stop_master();
 	void master_checkpoint();
 	void master_termcheck();
-	void sh_m_lerror(int source, double error);
+	void sh_m_lerror(int source, double error, long long count);
 	void cp_sh_m_lfinish(int source_part);
 
 	/////////////////////////////////////////////////////////

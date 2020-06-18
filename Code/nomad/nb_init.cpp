@@ -67,13 +67,7 @@ void NomadBody::initial_data4thread(){
 }
 
 void NomadBody::initial_data4machine(){
-	// used to compute the number of empty columns inside a machine
-	// BUGBUG: right now it does not have any purpose other than computing statistics
-	// we may enhance the efficiency of communication by taking advantage of this information
-	is_column_empty = callocator<atomic<bool> >().allocate(global_num_cols);
-	for(int i = 0; i < global_num_cols; i++){
-		is_column_empty[i] = true;
-	}
+
 }
 
 void NomadBody::initial_net_data(){
@@ -90,6 +84,23 @@ void NomadBody::initial_net_data(){
 	unit_bytenum = sizeof(int) + sizeof(long) + sizeof(double) * option->latent_dimension_;
 	// current queue size + number of columns + columns
 	msg_bytenum = sizeof(int) + sizeof(int) + unit_bytenum * UNITS_PER_MSG;
+}
+
+void NomadBody::initial_termcheck()
+{
+	// master
+	tm_min_updated_col = max(1, static_cast<int>(global_num_cols * option->termcheck_min_portion));
+	if(mpi_rank == 0){
+		tm_local_error_received.assign(mpi_size, 0.0);
+		tm_local_error_ready = callocator<atomic<bool> >().allocate(mpi_size);
+		for(int i = 0; i < mpi_size; ++i)
+			tm_local_error_ready[i] = false;
+		tm_local_update_count.assign(mpi_size, 0ll);
+		tm_local_update_count_sum_last = 0ll;
+	}
+	// worker
+	tm_col_error.assign(global_num_cols, 0.0);
+	tm_col_error_sum = 0.0;
 }
 
 void NomadBody::initial_cp(){
@@ -167,14 +178,7 @@ bool NomadBody::initial(NomadOption* opt){
 	test_count_errors = callocator<int>().allocate(option->num_threads_);
 	test_sum_errors = callocator<double>().allocate(option->num_threads_);
 
-	train_col_error.assign(global_num_cols, 0.0);
-	train_col_error_sum = 0.0;
-
-	local_error_ready = callocator<atomic<bool> >().allocate(mpi_size);
-	for(int i = 0; i < mpi_size; ++i)
-		local_error_ready[i] = false;
-	local_error_received.assign(mpi_size, 0.0);
-
+	initial_termcheck();
 	initial_cp();
 	initial_net_control();
 	allow_sending = true;

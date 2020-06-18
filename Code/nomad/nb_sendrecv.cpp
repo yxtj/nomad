@@ -55,7 +55,8 @@ void NomadBody::train_send_func(const double timeout){
 	}
 
 	const tick_count start_time = tick_count::now();
-	//		int monitor_num = 0;
+	double last_tm_send_time = 0.0;
+	long long last_tm_send_update = local_send_count;
 
 	char* send_message = sallocator<char>().allocate(msg_bytenum);
 	char* cur_pos = send_message + sizeof(int) + sizeof(int);
@@ -70,12 +71,6 @@ void NomadBody::train_send_func(const double timeout){
 		if(elapsed_seconds > timeout && !checkpointing){
 			break;
 		}
-
-		//if(monitor_num < elapsed_seconds){
-		//	cout << log_header << "sender thread alive," << mpi_rank << "," << monitor_num << ","
-		//			<< send_queue.unsafe_size() << ",endline" << endl;
-		//	monitor_num++;
-		//}
 
 		if(send_queue_force.try_pop(force_sent_signal)){
 			if(force_sent_signal.first == ColumnData::SIGNAL_CP_START){
@@ -94,7 +89,7 @@ void NomadBody::train_send_func(const double timeout){
 				for(int i = 0; i < mpi_size; ++i)
 					MPI_Ssend(reinterpret_cast<void*>(&epoch), sizeof(epoch), MPI_CHAR, i, MsgType::CP_RESUME, MPI_COMM_WORLD);
 			} else if(force_sent_signal.first == ColumnData::SIGNAL_LERROR){
-				double lerror = train_col_error_sum;
+				double lerror = tm_col_error_sum;
 				MPI_Ssend(reinterpret_cast<void*>(&lerror), sizeof(lerror), MPI_CHAR, 0, MsgType::LOCAL_ERROR, MPI_COMM_WORLD);
 			} else if(force_sent_signal.first == ColumnData::SIGNAL_TERMINATE){
 				int cnt = force_sent_signal.second;
@@ -114,7 +109,6 @@ void NomadBody::train_send_func(const double timeout){
 					int target_rank = target_dist(send_rng);
 					_send_msg(send_message, cur_num, target_rank);
 
-					local_send_count += cur_num;
 					cur_pos = send_message + sizeof(int) + sizeof(int);
 					cur_num = 0;
 				}
@@ -133,12 +127,11 @@ void NomadBody::train_send_func(const double timeout){
 			}
 
 			p_col->serialize(cur_pos, dim);
-			// incrementally update train_col_error_sum
-			train_col_error_sum += p_col->error - train_col_error[p_col->col_index_];
-			train_col_error[p_col->col_index_] = p_col->error;
+			// incrementally update tm_col_error_sum
+			tm_col_error_sum += p_col->error - tm_col_error[p_col->col_index_];
+			tm_col_error[p_col->col_index_] = p_col->error;
 
 			column_pool->push(p_col);
-
 			cur_pos += unit_bytenum;
 			cur_num++;
 
@@ -146,9 +139,19 @@ void NomadBody::train_send_func(const double timeout){
 				int target_rank = target_dist(send_rng);
 				_send_msg(send_message, cur_num, target_rank);
 
-				local_send_count += cur_num;
 				cur_pos = send_message + sizeof(int) + sizeof(int);
 				cur_num = 0;
+			}
+			// send local error for termination check
+			if(elapsed_seconds - last_tm_send_time > option->report_interval && last_tm_send_update != local_send_count)
+			{
+				last_tm_send_time = elapsed_seconds;
+				last_tm_send_update = local_send_count;
+				char data[sizeof(double) + sizeof(long long)];
+				*reinterpret_cast<double*>(data) = tm_col_error_sum;
+				*reinterpret_cast<long long*>(data+sizeof(double)) = local_send_count;
+				cout << log_header << "send local error: " << tm_col_error_sum << " update: " << local_send_count;
+				MPI_Ssend(data, sizeof(data), MPI_CHAR, 0, MsgType::LOCAL_ERROR, MPI_COMM_WORLD);
 			}
 
 		} else{
@@ -162,8 +165,6 @@ void NomadBody::train_send_func(const double timeout){
 	if(cur_num != 0){
 		int target_rank = target_dist(send_rng);
 		_send_msg(send_message, cur_num, target_rank);
-
-		local_send_count += cur_num;
 	}
 
 	// send dying message to every machine
@@ -239,8 +240,9 @@ void NomadBody::train_recv_func(){
 			}
 		} else if(status.MPI_TAG == MsgType::LOCAL_ERROR){
 			int source = status.MPI_SOURCE;
-			double local_sum = *reinterpret_cast<double*>(recv_message);
-			sh_m_lerror(source, local_sum);
+			double local_error_sum = *reinterpret_cast<double*>(recv_message);
+			long long local_update_count = *reinterpret_cast<long long*>(recv_message + sizeof(double));
+			sh_m_lerror(source, local_error_sum, local_update_count);
 		} else if(status.MPI_TAG == MsgType::CP_START){
 			int epoch = *reinterpret_cast<int*>(recv_message);
 			cp_shm_start(epoch);
@@ -254,7 +256,8 @@ void NomadBody::train_recv_func(){
 			int epoch = *reinterpret_cast<int*>(recv_message);
 			cp_sh_m_lfinish(epoch);
 		} else if(status.MPI_TAG == MsgType::TERMINATION){
-			finished = true;
+			flag_train_stop = true;
+			//finished = true;
 		}
 	}
 	sallocator<char>().deallocate(recv_message, msg_bytenum);
