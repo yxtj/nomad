@@ -389,7 +389,7 @@ int NomadBody::run(NomadOption* opt){
 		callocator<atomic<bool> >().deallocate(tm_local_error_ready, mpi_size);
 	}
 	callocator<atomic<bool> >().deallocate(cp_action_ready, option->num_threads_);
-	for(int i = 0; i < mpi_size; ++i){
+	for(int i = 0; i < option->num_threads_; ++i){
 		callocator<atomic<bool> >().deallocate(cp_need_archive_msg_from[i], mpi_size);
 	}
 	callocator<atomic<int> >().deallocate(cp_need_archive_msg_counter, option->num_threads_);
