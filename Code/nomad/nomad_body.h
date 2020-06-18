@@ -25,8 +25,6 @@
 #include "tbb/scalable_allocator.h"
 #include "tbb/cache_aligned_allocator.h"
 
-constexpr int UNITS_PER_MSG = 100;
-
 using std::vector;
 using std::string;
 using std::atomic;
@@ -207,8 +205,6 @@ private:
 	/////////////////////////////////////////////////////////
 	// Define Master Thread
 	/////////////////////////////////////////////////////////
-	void start_master();
-	void stop_master();
 	void master_checkpoint();
 	void master_termcheck();
 	void sh_m_lerror(int source, double error, long long count);

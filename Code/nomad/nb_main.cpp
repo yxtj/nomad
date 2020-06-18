@@ -405,10 +405,6 @@ int NomadBody::run(NomadOption* opt){
 /////////////////////////////////////////////////////////
 // Define Master Functions
 /////////////////////////////////////////////////////////
-void NomadBody::start_master()
-{
-
-}
 
 void NomadBody::master_termcheck()
 {
@@ -438,6 +434,7 @@ void NomadBody::master_termcheck()
 
 void NomadBody::sh_m_lerror(int source, double error, long long count)
 {
+	//cout << "tm receive: " << error << " - " << count << endl;
 	{
 		std::unique_lock<std::mutex> lk(tm_m);
 		tm_local_error_received[source] = error;
@@ -447,6 +444,7 @@ void NomadBody::sh_m_lerror(int source, double error, long long count)
 	if(all_of(tm_local_error_ready, tm_local_error_ready + mpi_size,
 		[](const atomic<bool>& b){ return b.load(); }))
 	{
+		//cout << "tm notify" << endl;
 		tm_cv.notify_all();
 	}
 }
@@ -614,7 +612,7 @@ void NomadBody::updater_func(int thread_index){
 					// calculate error
 					double cur_error = std::inner_product(col, col + dim, row, -train_row_val[offset]);
 					// accumulate error
-					tm_col_error[p_col->col_index_] += cur_error * cur_error;
+					p_col->error += cur_error * cur_error;
 
 					// update both row and column
 					for(int i = 0; i < dim; i++){

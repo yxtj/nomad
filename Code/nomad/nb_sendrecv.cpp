@@ -21,13 +21,13 @@
 
 using namespace std;
 
-
 /////////////////////////////////////////////////////////
 // Define message sending function
 /////////////////////////////////////////////////////////
 void NomadBody::_send_msg(char* send_message, const int cur_num, const int target_rank){
 	*(reinterpret_cast<int*>(send_message)) = static_cast<int>(send_queue.unsafe_size());
 	*(reinterpret_cast<int*>(send_message) + 1) = cur_num;
+	//cout << "W" << mpi_rank << ": send " << cur_num << " columns to " << target_rank << endl;
 	//tbb::tick_count t = tbb::tick_count::now();
 	int rc = MPI_Ssend(send_message, msg_bytenum, MPI_CHAR, target_rank, MsgType::DATA, MPI_COMM_WORLD);
 	if(rc != MPI_SUCCESS){
@@ -89,8 +89,10 @@ void NomadBody::train_send_func(const double timeout){
 				for(int i = 0; i < mpi_size; ++i)
 					MPI_Ssend(reinterpret_cast<void*>(&epoch), sizeof(epoch), MPI_CHAR, i, MsgType::CP_RESUME, MPI_COMM_WORLD);
 			} else if(force_sent_signal.first == ColumnData::SIGNAL_LERROR){
-				double lerror = tm_col_error_sum;
-				MPI_Ssend(reinterpret_cast<void*>(&lerror), sizeof(lerror), MPI_CHAR, 0, MsgType::LOCAL_ERROR, MPI_COMM_WORLD);
+				char data[sizeof(double) + sizeof(long long)];
+				*reinterpret_cast<double*>(data) = tm_col_error_sum;
+				*reinterpret_cast<long long*>(data + sizeof(double)) = local_send_count;
+				MPI_Ssend(data, sizeof(data), MPI_CHAR, 0, MsgType::LOCAL_ERROR, MPI_COMM_WORLD);
 			} else if(force_sent_signal.first == ColumnData::SIGNAL_TERMINATE){
 				int cnt = force_sent_signal.second;
 				for(int i = 0; i < mpi_size; ++i)
@@ -135,7 +137,7 @@ void NomadBody::train_send_func(const double timeout){
 			cur_pos += unit_bytenum;
 			cur_num++;
 
-			if(cur_num >= UNITS_PER_MSG){
+			if(cur_num >= option->col_per_msg){
 				int target_rank = target_dist(send_rng);
 				_send_msg(send_message, cur_num, target_rank);
 
@@ -150,7 +152,7 @@ void NomadBody::train_send_func(const double timeout){
 				char data[sizeof(double) + sizeof(long long)];
 				*reinterpret_cast<double*>(data) = tm_col_error_sum;
 				*reinterpret_cast<long long*>(data+sizeof(double)) = local_send_count;
-				cout << log_header << "send local error: " << tm_col_error_sum << " update: " << local_send_count;
+				//cout << log_header << "send local error: " << tm_col_error_sum << " update: " << local_send_count << endl;
 				MPI_Ssend(data, sizeof(data), MPI_CHAR, 0, MsgType::LOCAL_ERROR, MPI_COMM_WORLD);
 			}
 
@@ -305,7 +307,7 @@ void NomadBody::test_send_func(){
 
 				send_count++;
 
-				if(cur_num >= UNITS_PER_MSG){
+				if(cur_num >= option->col_per_msg){
 
 					*(reinterpret_cast<int*>(send_message)) = cur_num;
 

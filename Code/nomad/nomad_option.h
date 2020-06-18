@@ -13,10 +13,12 @@ struct NomadOption {
 	double par_lambda_;
 	unsigned long long seed_;
 	int latent_dimension_;
+
 	std::vector<double> timeouts_;
 	double min_error;
 	double report_interval; // time interval of reporting local error
 	double termcheck_min_portion; // min number of updated column to trigger termination check
+	int col_per_msg;
 	//int pipeline_token_num_;
 	int num_reuse_;
 	bool flag_pause_;
