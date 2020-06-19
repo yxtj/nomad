@@ -19,7 +19,6 @@ using namespace std;
 void NomadBody::_send_clear_signal(bool send2self, bool direct_send)
 {
 	if(direct_send){
-		int source = mpi_rank;
 		for(int target_rank = 0; target_rank < mpi_size; ++target_rank){
 			// including itself
 			if(!send2self && target_rank == mpi_rank)

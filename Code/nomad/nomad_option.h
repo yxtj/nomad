@@ -18,7 +18,8 @@ struct NomadOption {
 	double min_error;
 	double report_interval; // time interval of reporting local error
 	double termcheck_min_portion; // min number of updated column to trigger termination check
-	int col_per_msg;
+	int column_per_msg;
+	double interval_per_msg;
 	//int pipeline_token_num_;
 	int num_reuse_;
 	bool flag_pause_;

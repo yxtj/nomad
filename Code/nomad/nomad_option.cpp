@@ -25,8 +25,10 @@ bool NomadOption::parse_command(int& argc, char**& argv) {
 			"regularization parameter lambda")
 		("seed,s", value<unsigned long long>(&seed_)->default_value(12345),
 			"seed value of random number generator")
-		("col_per_msg", value<int>(&col_per_msg)->default_value(100),
-			"number of column buffered in a message")
+		("cpm", value<int>(&column_per_msg)->default_value(100),
+			"maximum number of columns buffered in a message")
+		("tpm", value<double>(&interval_per_msg)->default_value(0.5),
+			"maximum time interval between two consecutive messages")
 		("timeout,t",
 			value<vector<double> >(&timeouts_)->multitoken()->default_value(vector<double>(1, 10.0), "10.0"),
 			"timeout seconds until completion")
