@@ -57,7 +57,7 @@ message(STATUS "Thread lib: ${CMAKE_THREAD_LIBS_INIT}")
 add_executable(nomad
 	main.cpp
 	nomad_option.cpp pool.cpp
-	nb_data.cpp nb_init.cpp nb_main.cpp nb_sendrecv.cpp
+	nb_data.cpp nb_init.cpp nb_main.cpp nb_master.cpp nb_sendrecv.cpp
 	nb_net_control.cpp  nb_checkpoint.cpp
 )
 target_link_libraries(nomad ${CMAKE_THREAD_LIBS_INIT})
