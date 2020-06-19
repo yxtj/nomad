@@ -1,5 +1,4 @@
 #include "nomad_body.h"
-#include "pool.hpp"
 
 #include <tbb/tbb.h>
 
@@ -13,14 +12,13 @@
 #include <random>
 #include <boost/format.hpp>
 
+#include "mpi.h"
+#if defined(WIN32) || defined(_WIN32)
+#undef min
+#undef max
+#endif // WIN32
+
 using namespace std;
-
-//using tbb::atomic;
-using tbb::tick_count;
-
-using nomad::ColumnData;
-using nomad::MsgType;
-
 
 /////////////////////////////////////////////////////////
 // Define main running function

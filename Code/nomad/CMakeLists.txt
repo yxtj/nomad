@@ -52,8 +52,6 @@ message(STATUS "Boost_LIBRARIES: ${Boost_LIBRARIES}")
 find_package (Threads)
 message(STATUS "Thread lib: ${CMAKE_THREAD_LIBS_INIT}")
 
-#add_executable(nomad_float nomad_float.cpp)
-#add_executable(nomad_double nomad_double.cpp nomad_body.hpp nomad_option.cpp)
 add_executable(nomad
 	main.cpp
 	nomad_option.cpp pool.cpp

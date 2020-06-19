@@ -8,9 +8,6 @@
 
 using namespace std;
 
-using nomad::ColumnData;
-using nomad::MsgType;
-
 /////////////////////////////////////////////////////////
 // Define Master Termination Chek
 /////////////////////////////////////////////////////////
@@ -67,7 +64,7 @@ void NomadBody::sh_m_lerror(int source, double error, long long count)
 void NomadBody::master_checkpoint(){
 	tbb::tick_count start_time = tbb::tick_count::now();
 	cout << "M: start checkpoint thread" << endl;
-	tick_count last_cptime = start_time;
+	tbb::tick_count last_cptime = start_time;
 	std::chrono::duration<double> cp_interval(option->cp_interval_);
 	while(!finished){
 		std::unique_lock<std::mutex> lk(cp_m);

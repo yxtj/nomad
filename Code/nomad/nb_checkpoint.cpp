@@ -50,7 +50,7 @@ string NomadBody::gen_cp_file_name(int part_index)
 // Define Checkpoint Core Functions
 /////////////////////////////////////////////////////////
 void NomadBody::archive_local(int thread_index, double* latent_rows, int local_num_rows){
-	tick_count t0 = tbb::tick_count::now();
+	tbb::tick_count t0 = tbb::tick_count::now();
 	int part_index = mpi_rank * option->num_threads_ + thread_index;
 	int dim = option->latent_dimension_;
 	ofstream fout(gen_cp_file_name(part_index) + ".state", ofstream::binary);
@@ -63,7 +63,7 @@ void NomadBody::archive_local(int thread_index, double* latent_rows, int local_n
 
 void NomadBody::_archive_msg_queue(int thread_index, const string& suffix, colque& queue, bool locked)
 {
-	tick_count t0 = tbb::tick_count::now();
+	tbb::tick_count t0 = tbb::tick_count::now();
 	int part_index = mpi_rank * option->num_threads_ + thread_index;
 	char* buffer = new char[unit_bytenum];
 	colque temp;
@@ -102,7 +102,7 @@ void NomadBody::arhive_send_queue(bool locked)
 
 void NomadBody::archive_msg_queue_all(bool locked)
 {
-	tick_count t0 = tbb::tick_count::now();
+	tbb::tick_count t0 = tbb::tick_count::now();
 	// each job queue
 	for(int thread_index = 0; thread_index < option->num_threads_; ++thread_index){
 		arhive_job_queue(thread_index);
@@ -115,7 +115,7 @@ void NomadBody::archive_msg_queue_all(bool locked)
 
 void NomadBody::archive_msg(int thread_index, ColumnData* p_col){
 	char* buffer = new char[unit_bytenum];
-	tick_count t0 = tbb::tick_count::now();
+	tbb::tick_count t0 = tbb::tick_count::now();
 	p_col->serialize(buffer, option->latent_dimension_);
 	cp_fmsgs[thread_index]->write(buffer, unit_bytenum);
 	cp_write_time[thread_index] += (tbb::tick_count::now() - t0).seconds();
@@ -202,7 +202,7 @@ void NomadBody::_sync_all_update_thread()
 
 void NomadBody::cp_shm_start(int epoch)
 {
-	//cout << mpi_rank << " m start" << endl;
+	cout << mpi_rank << " m start" << endl;
 	cp_epoch = epoch;
 	checkpointing = true;
 	if(option->cp_type_ == "sync"){
@@ -224,7 +224,7 @@ void NomadBody::cp_shm_start(int epoch)
 
 void NomadBody::cp_shm_clear(int source)
 {
-	//cout << mpi_rank << " m clear " << source << endl;
+	cout << mpi_rank << " m clear " << source << endl;
 	if(option->cp_type_ == "sync"){
 		// nothing
 	} else if(option->cp_type_ == "async"){
@@ -244,7 +244,7 @@ void NomadBody::cp_shm_clear(int source)
 
 void NomadBody::cp_shm_resume(int epoch)
 {
-	//cout << mpi_rank << " m resume" << endl;
+	cout << mpi_rank << " m resume" << endl;
 	if(epoch != cp_epoch){
 		cerr << "ERROR: epoch of checkpoint does not match: " << cp_epoch << " vs " << epoch << endl;
 		exit(2);
@@ -273,7 +273,7 @@ void NomadBody::cp_shm_resume(int epoch)
 
 void NomadBody::cp_sht_start(int thread_index, int part_index, int epoch, double* latent_rows, int local_num_rows)
 {
-	//cout << mpi_rank << "-" << thread_index << " t start" << endl;
+	cout << mpi_rank << "-" << thread_index << " t start" << endl;
 	if(option->cp_type_ == "sync"){
 		// nothing
 	} else if(option->cp_type_ == "async"){
@@ -290,7 +290,7 @@ void NomadBody::cp_sht_start(int thread_index, int part_index, int epoch, double
 
 void NomadBody::cp_sht_clear(int thread_index, int part_index, int source, double* latent_rows, int local_num_rows)
 {
-	//cout << mpi_rank << "-" << thread_index << " t clear: " << source << endl;
+	cout << mpi_rank << "-" << thread_index << " t clear: " << source << endl;
 	if(option->cp_type_ == "sync"){
 		// nothing
 	} else if(option->cp_type_ == "async"){
@@ -326,7 +326,7 @@ void NomadBody::cp_sht_resume(int thread_index, int part_index, int epoch)
 
 void NomadBody::cp_update_func_action(int thread_index, int part_index, double* latent_rows, int local_num_rows)
 {
-	//cout << mpi_rank << "-" << thread_index << " cp_uf " << endl;
+	cout << mpi_rank << "-" << thread_index << " cp_uf " << endl;
 	if(option->cp_type_ == "sync"){
 		// triggered by start signal
 		_sync_all_update_thread();

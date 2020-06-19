@@ -34,7 +34,11 @@ bool NomadBody::initial_mpi(){
 	// retrieve MPI task info
 	MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
+	int hostname_len;
+	char hostname[MPI_MAX_PROCESSOR_NAME];
 	MPI_Get_processor_name(hostname, &hostname_len);
+	hostname[hostname_len] = '\0';
+	this->hostname = hostname;
 	return true;
 }
 
@@ -113,7 +117,7 @@ void NomadBody::initial_net_data(){
 	// col_index + vector
 	unit_bytenum = sizeof(int) + sizeof(long) + sizeof(double) * option->latent_dimension_;
 	// current queue size + number of columns + columns
-	msg_bytenum = sizeof(int) + sizeof(int) + unit_bytenum * option->col_per_msg;
+	msg_bytenum = sizeof(int) + sizeof(int) + unit_bytenum * option->column_per_msg;
 }
 
 void NomadBody::initial_termcheck()
@@ -191,8 +195,7 @@ bool NomadBody::initial(NomadOption* opt){
 	// this serves as a memory pool. global_num_cols * 3 / num_parts is arbitrary big enough number.
 	// when the capacity is exceeded, it automatically assigns additional memory.
 	// therefore no need to worry too much
-	column_pool = new nomad::Pool(option->latent_dimension_, option->num_threads_,
-		std::min(global_num_cols * 3 / num_parts, global_num_cols));
+	column_pool = new Pool(option->latent_dimension_, option->num_threads_);
 
 	// for updater_func
 	wait_number = 0;

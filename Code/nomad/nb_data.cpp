@@ -4,7 +4,15 @@
 #include <vector>
 #include <fstream>
 #include <numeric>
+#include <algorithm>
 
+#if defined(WIN32) || defined(_WIN32)
+#undef min
+#undef max
+#endif // WIN32
+
+#define MAT_FILE_CLASSID 1211216    /* used to indicate matrices in binary files */
+#define LONG_FILE_CLASSID 1015    /* used to indicate matrices in binary files with large number of nonzeroes */
 
 using namespace std;
 
@@ -15,7 +23,7 @@ static bool read_data(const string filename, int part_index, int num_parts,
 	long long& local_num_nonzero,
 	vector<int, sallocator<int> >& col_offset,
 	vector<int, sallocator<int> >& row_idx,
-	vector<scalar, sallocator<scalar> >& row_val,
+	vector<double, sallocator<double> >& row_val,
 	int& nrows, int& ncols, long long& total_nnz
 )
 {
@@ -126,7 +134,7 @@ static bool read_data(const string filename, int part_index, int num_parts,
 
 	// First create vector of vectors
 	vector<vector<int>, sallocator<int> > row_idx_vec(ncols);
-	vector<vector<scalar>, sallocator<int> > row_val_vec(ncols);
+	vector<vector<double>, sallocator<int> > row_val_vec(ncols);
 	int* col_idx_ptr = col_idx;
 	double* val_ptr = col_val;
 
@@ -136,7 +144,7 @@ static bool read_data(const string filename, int part_index, int num_parts,
 			double my_val = *val_ptr;
 			// use relative indices for rows
 			row_idx_vec[my_col_idx].push_back(i - min_row);
-			row_val_vec[my_col_idx].push_back(static_cast<scalar>(my_val));
+			row_val_vec[my_col_idx].push_back(static_cast<double>(my_val));
 			col_idx_ptr++;
 			val_ptr++;
 		}

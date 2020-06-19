@@ -4,9 +4,11 @@
 #define NOMAD_BODY_H_
 
 #include "nomad_option.h"
-#include "pool.hpp"
+#include "pool.h"
 #include "msg_type.h"
 #include <tbb/tbb.h>
+#include <tbb/scalable_allocator.h>
+#include <tbb/cache_aligned_allocator.h>
 
 #include <string>
 #include <fstream>
@@ -15,26 +17,10 @@
 #include <atomic>
 #include <thread>
 
-#include "mpi.h"
-#if defined(WIN32) || defined(_WIN32)
-#undef min
-#undef max
-#endif // WIN32
-
-//#include "CheckpointState.h"
-
-#include "tbb/scalable_allocator.h"
-#include "tbb/cache_aligned_allocator.h"
-
 using std::vector;
 using std::string;
 using std::atomic;
-
 //using tbb::atomic;
-using tbb::tick_count;
-
-using nomad::ColumnData;
-using nomad::MsgType;
 
 template <typename T>
 using sallocator = tbb::scalable_allocator<T>;
@@ -74,8 +60,7 @@ protected:
 	// data members:
 private:
 	int mpi_size, mpi_rank;
-	int hostname_len;
-	char hostname[MPI_MAX_PROCESSOR_NAME];
+	string hostname;
 
 	NomadOption* option;
 
@@ -92,7 +77,7 @@ private:
 
 	// create a column pool with big enough size
 	// this serves as a memory pool.
-	nomad::Pool* column_pool;
+	Pool* column_pool;
 
 	// setup initial queues of columns
 	// each thread owns each queue with corresponding access

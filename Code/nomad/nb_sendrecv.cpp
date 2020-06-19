@@ -54,7 +54,7 @@ void NomadBody::train_send_func(const double timeout){
 		std::this_thread::yield();
 	}
 
-	const tick_count start_time = tick_count::now();
+	const tbb::tick_count start_time = tbb::tick_count::now();
 	double last_tm_send_time = 0.0;
 	long long last_tm_send_update = local_send_count;
 
@@ -138,7 +138,7 @@ void NomadBody::train_send_func(const double timeout){
 			cur_pos += unit_bytenum;
 			cur_num++;
 
-			if(cur_num >= option->col_per_msg){
+			if(cur_num >= option->column_per_msg){
 				int target_rank = target_dist(send_rng);
 				//cout << mpi_rank << " send" << endl;
 				_send_msg(send_message, cur_num, target_rank);
@@ -309,7 +309,7 @@ void NomadBody::test_send_func(){
 
 				send_count++;
 
-				if(cur_num >= option->col_per_msg){
+				if(cur_num >= option->column_per_msg){
 
 					*(reinterpret_cast<int*>(send_message)) = cur_num;
 
