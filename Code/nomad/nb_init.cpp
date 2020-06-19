@@ -38,6 +38,36 @@ bool NomadBody::initial_mpi(){
 	return true;
 }
 
+void NomadBody::initial_dataset()
+{
+	dstrain.resize(option->num_threads_);
+	dstest.resize(option->num_threads_);
+	local_thread_num_rows.assign(option->num_threads_, 0);
+	local_thread_num_nonzero.assign(option->num_threads_, 0ll);
+	for(int thread_index = 0; thread_index < option->num_threads_; ++thread_index){
+		int part_index = mpi_rank * option->num_threads_ + thread_index;
+		bool succeed = load_train(option->path_, part_index, num_parts, thread_index == 0, dstrain[thread_index]);
+		//min_row_index, local_num_rows, train_col_offset, train_row_idx, train_row_val);
+		if(succeed == false){
+			cerr << "error in reading training file" << endl;
+			exit(11);
+		}
+
+		succeed = load_test(option->path_, part_index, num_parts, thread_index == 0, dstest[thread_index]);
+		//min_row_index, local_num_rows, test_col_offset, test_row_idx, test_row_val);
+		if(succeed == false){
+			cerr << "error in reading testing file" << endl;
+			exit(11);
+		}
+		global_num_cols = dstrain[thread_index].num_cols;
+		global_num_rows = dstrain[thread_index].num_rows;
+		global_num_nonzero = dstrain[thread_index].num_nonzero;
+
+		local_thread_num_rows[thread_index] = dstrain[thread_index].local_num_rows;
+		local_thread_num_nonzero[thread_index] = dstrain[thread_index].local_num_nonzero;
+	}
+}
+
 void NomadBody::initial_data4thread(){
 	// maintain the number of updates for each thread
 	num_updates = callocator<atomic<long long> >().allocate(option->num_threads_);
@@ -96,7 +126,7 @@ void NomadBody::initial_termcheck()
 		for(int i = 0; i < mpi_size; ++i)
 			tm_local_error_ready[i] = false;
 		tm_local_update_count.assign(mpi_size, 0ll);
-		tm_local_update_count_sum_last = 0ll;
+		tm_global_update_count = 0ll;
 	}
 	// worker
 	tm_col_error.assign(global_num_cols, 0.0);
@@ -150,8 +180,8 @@ bool NomadBody::initial(NomadOption* opt){
 
 	cout << log_header << "number of threads: " << option->num_threads_ << ", number of parts: " << num_parts << endl;
 
-	// read number of columns
-	global_num_cols = get_num_cols(option->path_);
+	initial_dataset();
+	// global_num_cols and global_num_nonzero are ready now.
 
 	initial_data4thread();
 	initial_data4machine();
@@ -164,8 +194,9 @@ bool NomadBody::initial(NomadOption* opt){
 	column_pool = new nomad::Pool(option->latent_dimension_, option->num_threads_,
 		std::min(global_num_cols * 3 / num_parts, global_num_cols));
 
-	//for updater_func
+	// for updater_func
 	wait_number = 0;
+	local_send_count = 0;
 
 	// distribution used to initialize parameters
 	// distribution is taken from Hsiang-Fu's implementation of DSGD

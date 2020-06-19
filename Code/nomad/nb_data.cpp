@@ -12,10 +12,11 @@ static bool read_data(const string filename, int part_index, int num_parts,
 	bool show_info,
 	int& min_row_index,
 	int& local_num_rows,
+	long long& local_num_nonzero,
 	vector<int, sallocator<int> >& col_offset,
 	vector<int, sallocator<int> >& row_idx,
 	vector<scalar, sallocator<scalar> >& row_val,
-	int& nrows, int& ncols, long long total_nnz
+	int& nrows, int& ncols, long long& total_nnz
 )
 {
 
@@ -85,15 +86,15 @@ static bool read_data(const string filename, int part_index, int num_parts,
 	// calculate how many number of entries we'd have to skip to get to the
 	// region of file that is interesting locally
 	long long begin_skip = std::accumulate(total_nnz_rows, total_nnz_rows + min_row, 0LL);
-	long long nnz = std::accumulate(total_nnz_rows + min_row, total_nnz_rows + max_row, 0LL);
-	long long end_skip = total_nnz - nnz - begin_skip;
+	local_num_nonzero = std::accumulate(total_nnz_rows + min_row, total_nnz_rows + max_row, 0LL);
+	long long end_skip = total_nnz - local_num_nonzero - begin_skip;
 
 	// BUGBUG: this is just for debugging purpose
 	
 	if(show_info){
 		cout << "nrows: " << nrows << ", ncols: " << ncols << ", total_nnz: " << total_nnz << ", "
 			<< "min_row: " << min_row << ", max_row: " << max_row << ", "
-			<< "begin_skip: " << begin_skip << ", nnz: " << nnz << endl;
+			<< "begin_skip: " << begin_skip << ", nnz: " << local_num_nonzero << endl;
 	}
 
 	// Skip over the begin_nnz number of column indices in the file
@@ -101,8 +102,8 @@ static bool read_data(const string filename, int part_index, int num_parts,
 
 	//cout << "read column indices" << endl;
 
-	int* col_idx = sallocator<int>().allocate(nnz);
-	if(!data_file.read(reinterpret_cast<char*>(col_idx), nnz * sizeof(int))){
+	int* col_idx = sallocator<int>().allocate(local_num_nonzero);
+	if(!data_file.read(reinterpret_cast<char*>(col_idx), local_num_nonzero * sizeof(int))){
 		cerr << "Error in reading column indices from file!" << endl;
 		return false;
 	}
@@ -112,8 +113,8 @@ static bool read_data(const string filename, int part_index, int num_parts,
 
 	//cout << "read values" << endl;
 
-	double* col_val = sallocator<double>().allocate(nnz);
-	if(!data_file.read(reinterpret_cast<char*>(col_val), nnz * sizeof(double))){
+	double* col_val = sallocator<double>().allocate(local_num_nonzero);
+	if(!data_file.read(reinterpret_cast<char*>(col_val), local_num_nonzero * sizeof(double))){
 		cerr << "Error in reading matrix values from file" << endl;
 		exit(1);
 	}
@@ -142,20 +143,17 @@ static bool read_data(const string filename, int part_index, int num_parts,
 	}
 
 	// Free up some space
-	sallocator<int>().deallocate(col_idx, nnz);
-	sallocator<double>().deallocate(col_val, nnz);
+	sallocator<int>().deallocate(col_idx, local_num_nonzero);
+	sallocator<double>().deallocate(col_val, local_num_nonzero);
 	sallocator<int>().deallocate(total_nnz_rows, nrows);
 
 	//cout << "form CSC" << endl;
 
 	// Now convert everything into CSC format
-	// vector<int, sallocator<int> > col_offset(ncols+1);
-	// vector<int, sallocator<int> > row_idx(nnz);
-	// vector<scalar, sallocator<scalar> > row_val(nnz);
 
 	col_offset.resize(ncols + 1);
-	row_idx.resize(nnz);
-	row_val.resize(nnz);
+	row_idx.resize(local_num_nonzero);
+	row_val.resize(local_num_nonzero);
 
 	int offset = 0;
 	col_offset[0] = 0;
@@ -200,7 +198,6 @@ int NomadBody::get_num_cols(const std::string& path){
 
 }
 
-
 bool NomadBody::load_train(const std::string& path,
 	int part_index, int num_parts, bool show_info,
 	Data& d
@@ -209,8 +206,7 @@ bool NomadBody::load_train(const std::string& path,
 	const string train_filename = path + "/train.dat";
 	return read_data(train_filename, part_index, num_parts,
 		show_info,
-		d.min_row_index,
-		d.local_num_rows,
+		d.min_row_index, d.local_num_rows, d.local_num_nonzero,
 		d.col_offset, d.row_idx, d.row_val,
 		d.num_rows, d.num_cols, d.num_nonzero);
 
@@ -224,8 +220,7 @@ bool NomadBody::load_test(const std::string& path,
 	const string test_filename = path + "/test.dat";
 	return read_data(test_filename, part_index, num_parts,
 		show_info,
-		d.min_row_index,
-		d.local_num_rows,
+		d.min_row_index, d.local_num_rows, d.local_num_nonzero,
 		d.col_offset, d.row_idx, d.row_val,
 		d.num_rows, d.num_cols, d.num_nonzero);
 

@@ -114,6 +114,7 @@ public:
 	}
 
 	void push(ColumnData *p_col){
+		p_col->error = 0.0;
 		queue_.push(p_col);
 	}
 

@@ -54,6 +54,7 @@ struct Data{
 
 	int min_row_index;
 	int local_num_rows;
+	long long local_num_nonzero;
 };
 
 class NomadBody{
@@ -79,6 +80,13 @@ private:
 
 	int num_parts;
 	int global_num_cols;
+	vector<Data, callocator<Data>> dstrain;
+	vector<Data, callocator<Data>> dstest;
+	// summary for train dataset
+	vector<int> local_thread_num_rows;
+	int global_num_rows;
+	vector<long long> local_thread_num_nonzero;
+	long long global_num_nonzero;
 	std::mt19937_64 rng;
 
 	// create a column pool with big enough size
@@ -125,12 +133,6 @@ private:
 	int* test_count_errors;
 	double* test_sum_errors;
 
-	// online termination check (RMSE) on worker part
-	// local sum error for each column
-	vector<double, callocator<double>> tm_col_error;
-	// incrementally updated in recv_thread and send_thread
-	double tm_col_error_sum;
-
 	// define constants needed for network communication
 	// col_index + vector
 	int unit_bytenum;	//const
@@ -141,7 +143,7 @@ private:
 
 	// data for checkpoint
 	// THE MAIN WORK FOR CHECKPOINT IS DONE IN updater_func() FOR MINIMIZEING THE MODIFICATION
-	bool finished;
+	atomic<bool> finished;
 	atomic<bool> checkpointing;
 	atomic<int> cp_ut_wait_counter;
 	atomic<bool>* cp_action_ready; // each thread
@@ -173,7 +175,13 @@ private:
 	int tm_min_updated_col;
 	// number of updated column on each mpi instance
 	vector<long long, callocator<double>> tm_local_update_count;
-	long long tm_local_update_count_sum_last;
+	long long tm_global_update_count;
+
+	// worker - termination check (online RMSE)
+	// local sum error for each column
+	vector<double, callocator<double>> tm_col_error;
+	// incrementally updated in recv_thread and send_thread
+	double tm_col_error_sum;
 
 	// network control
 	bool control_net_delay;
@@ -191,6 +199,7 @@ private:
 private:
 	bool initial_mpi();
 	int get_num_cols(const std::string& path);
+	void initial_dataset();
 	void initial_data4thread();
 	void initial_data4machine();
 	void initial_net_data();

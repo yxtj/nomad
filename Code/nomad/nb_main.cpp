@@ -6,20 +6,11 @@
 #include <iomanip>
 #include <string>
 #include <fstream>
-#include <cmath>
 #include <vector>
 #include <algorithm>
 #include <numeric>
 #include <random>
 #include <boost/format.hpp>
-
-#include "mpi.h"
-#if defined(WIN32) || defined(_WIN32)
-#undef min
-#undef max
-#endif // WIN32
-
-#include "CheckpointState.h"
 
 using namespace std;
 
@@ -34,33 +25,17 @@ using nomad::MsgType;
 // Define main running function
 /////////////////////////////////////////////////////////
 int NomadBody::run(NomadOption* opt){
-
 	if(!initial(opt)){
 		return 1;
 	}
 
 	// count the number of threads in the machine which initial setup for training is done
-	//atomic<int> count_setup_threads;
 	count_setup_threads = 0;
 
-	// this flag will be turned on when all threads are ready for training
-	//atomic<bool> flag_train_ready;
 	flag_train_ready = false;
-
-	// this flag will be used to send signals to all threads that it has to stop training
-	//atomic<bool> flag_train_stop;
 	flag_train_stop = false;
-
-	// this flag will be turned on when all threads are ready for testing
-	//atomic<bool> flag_test_ready;
 	flag_test_ready = false;
-
-	// this flag will be used to send signals to all threads that it has to stop testing
-	//atomic<bool> flag_test_stop;
 	flag_test_stop = false;
-
-	//std::mutex print_mutex;
-	//std::condition_variable print_waiter;
 
 	std::thread* master_cp_thread = nullptr;
 	std::thread* master_tm_thread = nullptr;
@@ -94,12 +69,11 @@ int NomadBody::run(NomadOption* opt){
 	int col_start = columns_per_machine * mpi_rank;
 	int col_end = std::min(columns_per_machine * (mpi_rank + 1), global_num_cols);
 
+	// create additional RNG, to make it identical to other programs
+	mt19937_64 rng_temp(option->seed_ + mpi_rank + 137);
+
 	// generate columns
 	for(int i = col_start; i < col_end; i++){
-
-		// create additional RNG, to make it identical to other programs
-		mt19937_64 rng_temp(option->seed_ + mpi_rank + 137);
-
 		// create a column
 		ColumnData* p_col = column_pool->pop();
 		p_col->col_index_ = i;
@@ -122,9 +96,10 @@ int NomadBody::run(NomadOption* opt){
 		}
 	}
 
-
-	// XXX: main working loop
-	for(unsigned int main_timeout_iter = 0; main_timeout_iter < option->timeouts_.size(); main_timeout_iter++){
+	tbb::tick_count start_time = tbb::tick_count::now();
+	double test_time = 0.0;
+	// main working loop
+	for(unsigned int main_timeout_iter = 0; !finished && main_timeout_iter < option->timeouts_.size(); main_timeout_iter++){
 
 		const double timeout = (main_timeout_iter == 0) ? option->timeouts_[0] :
 			option->timeouts_[main_timeout_iter] - option->timeouts_[main_timeout_iter - 1];
@@ -150,7 +125,10 @@ int NomadBody::run(NomadOption* opt){
 		flag_train_ready = false;
 		count_setup_threads = 0;
 
-		// prepare for test
+		/////////////////////////////////////////////////////////
+		// Prepare for Training
+		/////////////////////////////////////////////////////////
+		tbb::tick_count test_start_time = tbb::tick_count::now();
 		{
 			// gather everything that is within the machine
 			vector<ColumnData*, sallocator<ColumnData*> > local_columns;
@@ -207,14 +185,14 @@ int NomadBody::run(NomadOption* opt){
 
 		// receive columns for testing
 		test_recv_func();
-		cout << log_header << "test receive done," << mpi_rank << endl;
+		cout << log_header << "test receive done" << endl;
 
 		test_send_thread.join();
 
 		// test done
 		flag_test_stop = true;
 
-		cout << log_header << "waiting to join with updaters," << mpi_rank << endl;
+		cout << log_header << "waiting to join with updaters" << endl;
 
 		while(count_setup_threads < option->num_threads_){
 			std::this_thread::yield();
@@ -228,13 +206,14 @@ int NomadBody::run(NomadOption* opt){
 		for(int i = 0; i < option->num_threads_; i++){
 			machine_num_updates += num_updates[i];
 		}
-		cout << log_header << "machine_num_updates: " << machine_num_updates << endl;
 
 		long long machine_num_failures = 0; // std::accumulate(num_updates, num_updates + option->num_threads_, 0);
 		for(int i = 0; i < option->num_threads_; i++){
 			machine_num_failures += num_failures[i];
 		}
-		cout << log_header << "machine_num_failures: " << machine_num_failures << endl;
+
+		cout << log_header << "machine_num_updates: " << machine_num_updates
+			<< ", machine_num_failures: " << machine_num_failures << endl;
 
 		int machine_train_count_error = std::accumulate(train_count_errors, train_count_errors + option->num_threads_, 0);
 		int machine_test_count_error = std::accumulate(test_count_errors, test_count_errors + option->num_threads_, 0);
@@ -262,23 +241,25 @@ int NomadBody::run(NomadOption* opt){
 
 		MPI_Barrier(MPI_COMM_WORLD);
 
+
 		if(mpi_rank == 0){
-			cout << log_header << "=====================================================" << endl;
-			cout << log_header << "elapsed time: " << option->timeouts_[main_timeout_iter] << endl;
-			cout << log_header << "current training RMSE: " << std::fixed << std::setprecision(10)
+			tbb::tick_count now = tbb::tick_count::now();
+			test_time = (now - test_start_time).seconds();
+			double elapsed = (now - start_time).seconds() - test_time;
+			cout << "=====================================================" << endl;
+			cout << "elapsed time: " << (finished ? elapsed : option->timeouts_[main_timeout_iter]) 
+				<< " total training time: " << elapsed << endl;
+			cout << "current training RMSE: " << std::fixed << std::setprecision(10)
 				<< sqrt(global_train_sum_error / global_train_count_error) << endl;
-			cout << log_header << "current test RMSE: " << std::fixed << std::setprecision(10)
+			cout << "current test RMSE: " << std::fixed << std::setprecision(10)
 				<< sqrt(global_test_sum_error / global_test_count_error) << endl;
 
-			cout << log_header << "testgrep," << mpi_size << "," << option->num_threads_ << ","
-				<< option->timeouts_[main_timeout_iter] << "," << global_num_updates << ","
-				<< sqrt(global_test_sum_error / global_test_count_error)
-				<< "," << global_test_sum_error << "," << global_test_count_error
-				<< "," << global_num_failures << "," << global_send_count
-				<< "," << sqrt(global_train_sum_error / global_train_count_error)
-				<< "," << global_train_sum_error << "," << global_train_count_error
+			cout << std::fixed << std::setprecision(4) << "detail: "
+				<< "train: s=" << global_train_sum_error << ", c=" << global_train_count_error
+				<< "; test: s=" << global_test_sum_error << ", c=" << global_test_count_error
+				<< "; u="<< global_num_updates << ", f=" << global_num_failures << ", s=" << global_send_count
 				<< endl;
-			cout << log_header << "=====================================================" << endl;
+			cout << "=====================================================" << endl;
 		}
 		if(option->flag_pause_){
 			std::this_thread::sleep_for(std::chrono::duration<double>(3.0));
@@ -294,12 +275,6 @@ int NomadBody::run(NomadOption* opt){
 		for(ColumnData* p_col : saved_columns){
 
 			p_col->flag_ = 0;
-			// create initial permutation for the column
-//				p_col->pos_ = 0;
-//				for(int j = 0; j < option->num_threads_; j++){
-//					p_col->perm_[j] = j;
-//				}
-//				std::shuffle(p_col->perm_, p_col->perm_ + option->num_threads_, rng);
 			p_col->set_perm(option->num_threads_, rng);
 
 			// push to the job queue
@@ -409,6 +384,7 @@ int NomadBody::run(NomadOption* opt){
 void NomadBody::master_termcheck()
 {
 	tbb::tick_count start_time = tbb::tick_count::now();
+	global_error = numeric_limits<double>::infinity();
 	double diff = numeric_limits<double>::infinity();
 	while(!finished && diff > option->min_error){
 		std::unique_lock<std::mutex> lk(tm_m);
@@ -417,16 +393,17 @@ void NomadBody::master_termcheck()
 			break;
 		for(int i = 0; i < mpi_size; ++i)
 			tm_local_error_ready[i] = false;
-		long long tm_local_update_count_sum_new = accumulate(tm_local_update_count.begin(), tm_local_update_count.end(), 0ll);
-		if(tm_local_update_count_sum_new - tm_local_update_count_sum_last < tm_min_updated_col)
+		long long tm_global_update_count_new = accumulate(tm_local_update_count.begin(), tm_local_update_count.end(), 0ll);
+		if(tm_global_update_count_new - tm_global_update_count < tm_min_updated_col)
 			continue;
-		tm_local_update_count_sum_last = tm_local_update_count_sum_new;
+		tm_global_update_count = tm_global_update_count_new;
 		double sum = accumulate(tm_local_error_received.begin(), tm_local_error_received.end(), 0.0);
-		diff = abs(sum - global_error);
+		double rmse = sqrt(sum / global_num_nonzero);
+		diff = abs(rmse - global_error);
 		double time = (tbb::tick_count::now() - start_time).seconds();
-		cout << "M: termination check at " << time
-			<< " last error: " << global_error << " new error: " << sum << " difference: " << diff << endl;
-		global_error = sum;
+		cout << boost::format("M: termination check at %.2lf: last RMSE: %g new RMSE: %g difference: %g")
+			% time % global_error % rmse % diff << endl;
+		global_error = rmse;
 	}
 	cout << "M: send terimination signal" << endl;
 	send_queue_force.emplace(ColumnData::SIGNAL_TERMINATE, tm_count);
@@ -434,7 +411,7 @@ void NomadBody::master_termcheck()
 
 void NomadBody::sh_m_lerror(int source, double error, long long count)
 {
-	//cout << "tm receive: " << error << " - " << count << endl;
+	cout << "M: tm receive: " << error << " - " << count << endl;
 	{
 		std::unique_lock<std::mutex> lk(tm_m);
 		tm_local_error_received[source] = error;
@@ -444,7 +421,7 @@ void NomadBody::sh_m_lerror(int source, double error, long long count)
 	if(all_of(tm_local_error_ready, tm_local_error_ready + mpi_size,
 		[](const atomic<bool>& b){ return b.load(); }))
 	{
-		//cout << "tm notify" << endl;
+		cout << "M: tm notify" << endl;
 		tm_cv.notify_all();
 	}
 }
@@ -495,29 +472,12 @@ void NomadBody::updater_func(int thread_index){
 	// Read Data
 	/////////////////////////////////////////////////////////
 
-	// each thread reads its own portion of data and stores in CSC format
-	Data dtrain, dtest;
+	vector<int, sallocator<int> >& train_col_offset = dstrain[thread_index].col_offset;
+	vector<int, sallocator<int> >& train_row_idx = dstrain[thread_index].row_idx;
+	vector<double, sallocator<double> >& train_row_val = dstrain[thread_index].row_val;
 
-	bool succeed = load_train(option->path_, part_index, num_parts, thread_index == 0, dtrain);
-	//min_row_index, local_num_rows, train_col_offset, train_row_idx, train_row_val);
-	if(succeed == false){
-		cerr << "error in reading training file" << endl;
-		exit(11);
-	}
-
-	succeed = load_test(option->path_, part_index, num_parts, thread_index == 0, dtest);
-	//min_row_index, local_num_rows, test_col_offset, test_row_idx, test_row_val);
-	if(succeed == false){
-		cerr << "error in reading testing file" << endl;
-		exit(11);
-	}
-
-	vector<int, sallocator<int> >& train_col_offset = dtrain.col_offset, test_col_offset = dtest.col_offset;
-	vector<int, sallocator<int> > train_row_idx = dtrain.row_idx, test_row_idx = dtest.row_idx;
-	vector<double, sallocator<double> > train_row_val = dtrain.row_val, test_row_val = dtest.row_val;
-
-	int local_num_rows = dtrain.local_num_rows;
-	int min_row_index = dtrain.min_row_index;
+	int local_num_rows = dstrain[thread_index].local_num_rows;
+	int min_row_index = dstrain[thread_index].min_row_index;
 
 	/////////////////////////////////////////////////////////
 	// Initialize Latent Data Structure
@@ -551,12 +511,14 @@ void NomadBody::updater_func(int thread_index){
 	// notify that the thread is ready to run
 	count_setup_threads++;
 
-	for(unsigned int timeout_iter = 0; timeout_iter < option->timeouts_.size(); timeout_iter++){
+	for(unsigned int timeout_iter = 0; !finished && timeout_iter < option->timeouts_.size(); timeout_iter++){
 		cout << log_header << "thread: " << thread_index << " ready to train!" << endl;
 		// wait until all threads are ready
-		while(flag_train_ready == false){
+		while(!finished && flag_train_ready == false){
 			std::this_thread::yield();
 		}
+		if(finished)
+			break;
 
 		/////////////////////////////////////////////////////////
 		// Training
@@ -667,6 +629,10 @@ void NomadBody::updater_func(int thread_index){
 		// Testing
 		/////////////////////////////////////////////////////////
 
+		vector<int, sallocator<int> >& test_col_offset = dstest[thread_index].col_offset;
+		vector<int, sallocator<int> >& test_row_idx = dstest[thread_index].row_idx;
+		vector<double, sallocator<double> >& test_row_val = dstest[thread_index].row_val;
+
 		int num_col_processed = 0;
 
 		double train_sum_squared_error = 0.0;
@@ -695,6 +661,7 @@ void NomadBody::updater_func(int thread_index){
 				double* col = p_col->values_;
 				const int col_index = p_col->col_index_;
 
+				auto temp = train_sum_squared_error;
 				// for each training data point
 				for(int offset = train_col_offset[col_index];
 					offset < train_col_offset[col_index + 1]; offset++){
@@ -758,7 +725,9 @@ void NomadBody::updater_func(int thread_index){
 
 	} // timeout list
 
-	// print to the file
+	/////////////////////////////////////////////////////////
+	// Output the row part
+	/////////////////////////////////////////////////////////
 	if(option->output_path_.length() > 0){
 		// output thread by thread
 		while(wait_number < part_index % option->num_threads_){

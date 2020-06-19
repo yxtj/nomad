@@ -68,7 +68,7 @@ void NomadBody::train_send_func(const double timeout){
 	while(true){
 
 		double elapsed_seconds = (tbb::tick_count::now() - start_time).seconds();
-		if(elapsed_seconds > timeout && !checkpointing){
+		if((finished || elapsed_seconds > timeout) && !checkpointing){
 			break;
 		}
 
@@ -139,6 +139,7 @@ void NomadBody::train_send_func(const double timeout){
 
 			if(cur_num >= option->col_per_msg){
 				int target_rank = target_dist(send_rng);
+				//cout << mpi_rank << " send" << endl;
 				_send_msg(send_message, cur_num, target_rank);
 
 				cur_pos = send_message + sizeof(int) + sizeof(int);
@@ -259,7 +260,7 @@ void NomadBody::train_recv_func(){
 			cp_sh_m_lfinish(epoch);
 		} else if(status.MPI_TAG == MsgType::TERMINATION){
 			flag_train_stop = true;
-			//finished = true;
+			finished = true;
 		}
 	}
 	sallocator<char>().deallocate(recv_message, msg_bytenum);
@@ -362,7 +363,7 @@ void NomadBody::test_send_func(){
 
 	sallocator<char>().deallocate(send_message, msg_bytenum);
 
-	cout << log_header << "test send thread finishing," << mpi_rank << endl;
+	cout << log_header << "test send thread finishing" << endl;
 
 } // end of test_send_func
 
