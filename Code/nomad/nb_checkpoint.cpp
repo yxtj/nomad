@@ -202,6 +202,7 @@ void NomadBody::_sync_all_update_thread()
 
 void NomadBody::cp_shm_start(int epoch)
 {
+	//cout << mpi_rank << " m start" << endl;
 	cp_epoch = epoch;
 	checkpointing = true;
 	if(option->cp_type_ == "sync"){
@@ -223,6 +224,7 @@ void NomadBody::cp_shm_start(int epoch)
 
 void NomadBody::cp_shm_clear(int source)
 {
+	//cout << mpi_rank << " m clear " << source << endl;
 	if(option->cp_type_ == "sync"){
 		// nothing
 	} else if(option->cp_type_ == "async"){
@@ -242,6 +244,7 @@ void NomadBody::cp_shm_clear(int source)
 
 void NomadBody::cp_shm_resume(int epoch)
 {
+	//cout << mpi_rank << " m resume" << endl;
 	if(epoch != cp_epoch){
 		cerr << "ERROR: epoch of checkpoint does not match: " << cp_epoch << " vs " << epoch << endl;
 		exit(2);
@@ -270,6 +273,7 @@ void NomadBody::cp_shm_resume(int epoch)
 
 void NomadBody::cp_sht_start(int thread_index, int part_index, int epoch, double* latent_rows, int local_num_rows)
 {
+	//cout << mpi_rank << "-" << thread_index << " t start" << endl;
 	if(option->cp_type_ == "sync"){
 		// nothing
 	} else if(option->cp_type_ == "async"){
@@ -286,6 +290,7 @@ void NomadBody::cp_sht_start(int thread_index, int part_index, int epoch, double
 
 void NomadBody::cp_sht_clear(int thread_index, int part_index, int source, double* latent_rows, int local_num_rows)
 {
+	//cout << mpi_rank << "-" << thread_index << " t clear: " << source << endl;
 	if(option->cp_type_ == "sync"){
 		// nothing
 	} else if(option->cp_type_ == "async"){
@@ -321,6 +326,7 @@ void NomadBody::cp_sht_resume(int thread_index, int part_index, int epoch)
 
 void NomadBody::cp_update_func_action(int thread_index, int part_index, double* latent_rows, int local_num_rows)
 {
+	//cout << mpi_rank << "-" << thread_index << " cp_uf " << endl;
 	if(option->cp_type_ == "sync"){
 		// triggered by start signal
 		_sync_all_update_thread();

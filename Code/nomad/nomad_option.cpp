@@ -54,7 +54,7 @@ bool NomadOption::parse_command(int& argc, char**& argv) {
 			"numberic ID of current job, used to distinguish different job's internal files.")
 		("cptype,c", value<string>(&cp_type_)->default_value("none"),
 			"type of checkpoint (none, sync, async, vs)")
-		("cpinterval", value<double>(&cp_interval_)->default_value(0.0),
+		("cpinterval,k", value<double>(&cp_interval_)->default_value(0.0),
 			"interval of checkpoint")
 		("cppath,p", value<string>(&cp_path_)->default_value(""),
 			"path to store checkpoint")
@@ -91,6 +91,10 @@ bool NomadOption::parse_command(int& argc, char**& argv) {
 		}
 		if(cp_type_ != "none" && cp_interval_ <= 0){
 			cerr << "checkpoint interval is invalid." << endl;
+			flag_help = true;
+		}
+		if(cp_type_ != "none" && cp_path_.empty()){
+			cerr << "checkpoint path is not given." << endl;
 			flag_help = true;
 		}
 

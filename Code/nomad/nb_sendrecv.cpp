@@ -98,6 +98,7 @@ void NomadBody::train_send_func(const double timeout){
 				for(int i = 0; i < mpi_size; ++i)
 					MPI_Ssend(reinterpret_cast<void*>(&cnt), sizeof(cnt), MPI_CHAR, i, MsgType::TERMINATION, MPI_COMM_WORLD);
 			}
+			cout << log_header << "send force: " << force_sent_signal.first << " - " << force_sent_signal.second << endl;
 			continue;
 		}
 

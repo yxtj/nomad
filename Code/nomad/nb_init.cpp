@@ -144,9 +144,9 @@ void NomadBody::initial_cp(){
 	cp_received_clear_counter = 0;
 	//received_flush.resize(option->num_threads_, vector<bool>(num_parts, false));
 	cp_need_archive_msg_from.resize(option->num_threads_);
-	cp_need_archive_msg_counter = callocator<atomic<int>>().allocate(mpi_size);
+	cp_need_archive_msg_counter = callocator<atomic<int>>().allocate(option->num_threads_);
 	for(int i = 0; i < option->num_threads_; ++i){
-		cp_need_archive_msg_counter = 0;
+		cp_need_archive_msg_counter[i] = 0;
 		cp_need_archive_msg_from[i] = callocator<atomic<bool>>().allocate(mpi_size);
 		for(int j = 0; j < mpi_size; ++j)
 			cp_need_archive_msg_from[i][j] = false;

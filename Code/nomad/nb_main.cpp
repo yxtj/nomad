@@ -239,8 +239,13 @@ int NomadBody::run(NomadOption* opt){
 		long long global_send_count = 0;
 		MPI_Allreduce(&local_send_count, &global_send_count, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
 
-		MPI_Barrier(MPI_COMM_WORLD);
+		double machine_cp_write_time = std::accumulate(cp_write_time.begin(), cp_write_time.end(), 0.0);
+		double global_cp_write_time = 0.0;
+		if(option->cp_type_ != "none"){
+			MPI_Allreduce(&machine_cp_write_time, &global_cp_write_time, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+		}
 
+		MPI_Barrier(MPI_COMM_WORLD);
 
 		if(mpi_rank == 0){
 			tbb::tick_count now = tbb::tick_count::now();
@@ -259,6 +264,10 @@ int NomadBody::run(NomadOption* opt){
 				<< "; test: s=" << global_test_sum_error << ", c=" << global_test_count_error
 				<< "; u="<< global_num_updates << ", f=" << global_num_failures << ", s=" << global_send_count
 				<< endl;
+			if(option->cp_type_ != "none"){
+				cout << "Total write time for " << cp_master_epoch << " checkpoints " << global_cp_write_time
+					<< " . Each one is " << global_cp_write_time / cp_master_epoch << endl;
+			}
 			cout << "=====================================================" << endl;
 		}
 		if(option->flag_pause_){
@@ -304,14 +313,6 @@ int NomadBody::run(NomadOption* opt){
 	cout << log_header << "Waiting for updater threads to join" << endl;
 	for(int i = 0; i < option->num_threads_; i++){
 		updater_threads[i].join();
-	}
-
-	if(mpi_rank == 0 && option->cp_type_ != "none"){
-		double machine_cp_write_time = std::accumulate(cp_write_time.begin(), cp_write_time.end(), 0.0);
-		double global_cp_write_time = 0.0;
-		MPI_Allreduce(&machine_cp_write_time, &global_cp_write_time, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-		cout << log_header << "Total write time for " << cp_master_epoch << " checkpoints " << global_cp_write_time
-			<< " . Each one is " << global_cp_write_time / cp_master_epoch << endl;
 	}
 
 	// output column part
@@ -427,18 +428,20 @@ void NomadBody::sh_m_lerror(int source, double error, long long count)
 }
 
 void NomadBody::master_checkpoint(){
+	tbb::tick_count start_time = tbb::tick_count::now();
 	cout << "M: start checkpoint thread" << endl;
-	std::unique_lock<std::mutex> lk(cp_m);
-	tick_count last_cptime = tbb::tick_count::now();
+	tick_count last_cptime = start_time;
 	std::chrono::duration<double> cp_interval(option->cp_interval_);
 	while(!finished){
+		std::unique_lock<std::mutex> lk(cp_m);
+		// use cp_cv.wait_for to implement an interruptable sleep_for
 		bool btm = cp_cv.wait_for(lk, cp_interval, [&](){
 			return (tbb::tick_count::now() - last_cptime).seconds() >= option->cp_interval_;
 			});
 		if(!finished && flag_train_ready && !flag_train_stop){
 			if(!btm)
 				continue;
-			cout << "M: sending out checkpoint signal " << cp_master_epoch << endl;
+			cout << "M: start checkpoint " << cp_master_epoch << " at " << (tbb::tick_count::now() - start_time).seconds() << endl;
 			send_queue_force.emplace(ColumnData::SIGNAL_CP_START, cp_master_epoch);
 			// wait for local finish
 			while(cp_master_lfinish_count < mpi_size){
@@ -450,6 +453,7 @@ void NomadBody::master_checkpoint(){
 			cp_master_lfinish_count = 0;
 			cp_master_epoch++;
 			last_cptime = tbb::tick_count::now();
+			cout << "M: finish checkpoint " << cp_master_epoch << " at " << (last_cptime - start_time).seconds() << endl;
 		}
 	}
 }
