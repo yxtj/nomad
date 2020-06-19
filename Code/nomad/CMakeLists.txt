@@ -48,15 +48,19 @@ include_directories( ${Boost_INCLUDE_DIR} )
 link_libraries(${Boost_LIBRARIES} )
 message(STATUS "Boost_LIBRARIES: ${Boost_LIBRARIES}")
 
+# Locate Thread library
+find_package (Threads)
+message(STATUS "Thread lib: ${CMAKE_THREAD_LIBS_INIT}")
 
 #add_executable(nomad_float nomad_float.cpp)
 #add_executable(nomad_double nomad_double.cpp nomad_body.hpp nomad_option.cpp)
 add_executable(nomad
 	main.cpp
-	nomad_option.cpp
+	nomad_option.cpp pool.cpp
 	nb_data.cpp nb_init.cpp nb_main.cpp nb_sendrecv.cpp
 	nb_net_control.cpp  nb_checkpoint.cpp
 )
+target_link_libraries(nomad ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(synthgen synthgen.cpp)
 add_executable(synthgen_conf synthgen-conf.cpp)

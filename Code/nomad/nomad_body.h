@@ -6,13 +6,14 @@
 #include "nomad_option.h"
 #include "pool.hpp"
 #include "msg_type.h"
-#include "tbb/tbb.h"
+#include <tbb/tbb.h>
 
 #include <string>
 #include <fstream>
 #include <vector>
 #include <condition_variable>
 #include <atomic>
+#include <thread>
 
 #include "mpi.h"
 #if defined(WIN32) || defined(_WIN32)
@@ -20,7 +21,7 @@
 #undef max
 #endif // WIN32
 
-#include "CheckpointState.h"
+//#include "CheckpointState.h"
 
 #include "tbb/scalable_allocator.h"
 #include "tbb/cache_aligned_allocator.h"

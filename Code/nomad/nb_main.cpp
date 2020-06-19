@@ -1,4 +1,5 @@
 #include "nomad_body.h"
+#include "pool.hpp"
 
 #include <tbb/tbb.h>
 
@@ -665,7 +666,6 @@ void NomadBody::updater_func(int thread_index){
 				double* col = p_col->values_;
 				const int col_index = p_col->col_index_;
 
-				auto temp = train_sum_squared_error;
 				// for each training data point
 				for(int offset = train_col_offset[col_index];
 					offset < train_col_offset[col_index + 1]; offset++){
