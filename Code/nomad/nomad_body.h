@@ -120,6 +120,7 @@ private:
 	double* test_sum_errors;
 
 	// define constants needed for network communication
+	int column_per_msg;
 	// col_index + vector
 	int unit_bytenum;	//const
 	// current queue size + number of columns + columns

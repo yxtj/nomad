@@ -42,7 +42,7 @@ void NomadBody::master_termcheck()
 
 void NomadBody::sh_m_lerror(int source, double error, long long count)
 {
-	cout << "M: tm receive: " << error << " - " << count << endl;
+	cout << "M: tm receive from " << source << ": " << error << " - " << count << endl;
 	{
 		std::unique_lock<std::mutex> lk(tm_m);
 		tm_local_error_received[source] = error;

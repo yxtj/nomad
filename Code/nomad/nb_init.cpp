@@ -113,11 +113,14 @@ void NomadBody::initial_net_data(){
 	// we try to bound the size of send_queue's by this number
 	queue_upperbound = global_num_cols * 4 / mpi_size;
 
+	column_per_msg = min(option->column_per_msg, global_num_cols / mpi_size / 4);
+	column_per_msg = max(1, column_per_msg);
+
 	// define constants needed for network communication
 	// col_index + vector
 	unit_bytenum = sizeof(int) + sizeof(long) + sizeof(double) * option->latent_dimension_;
 	// current queue size + number of columns + columns
-	msg_bytenum = sizeof(int) + sizeof(int) + unit_bytenum * option->column_per_msg;
+	msg_bytenum = sizeof(int) + sizeof(int) + unit_bytenum * column_per_msg;
 }
 
 void NomadBody::initial_termcheck()
