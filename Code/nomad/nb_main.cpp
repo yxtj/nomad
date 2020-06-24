@@ -300,11 +300,13 @@ int NomadBody::run(NomadOption* opt){
 	finished = true;
 	cp_cv.notify_all();
 	if(master_cp_thread && master_cp_thread->joinable()){
+		cout << log_header << "Waiting for master - checkpoint thread to join" << endl;
 		master_cp_thread->join();
 		delete master_cp_thread;
 	}
 	tm_cv.notify_all();
 	if(master_tm_thread && master_tm_thread->joinable()){
+		cout << log_header << "Waiting for master - termindation check thread to join" << endl;
 		master_tm_thread->join();
 		delete master_tm_thread;
 	}

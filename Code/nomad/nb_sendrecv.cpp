@@ -143,7 +143,6 @@ void NomadBody::train_send_func(const double timeout){
 				int target_rank = target_dist(send_rng);
 				//cout << mpi_rank << " send" << endl;
 				_send_msg(send_message, cur_num, target_rank);
-
 				cur_pos = send_message + sizeof(int) + sizeof(int);
 				cur_num = 0;
 			}
@@ -165,6 +164,8 @@ void NomadBody::train_send_func(const double timeout){
 				last_send_time = elapsed_seconds;
 				int target_rank = target_dist(send_rng);
 				_send_msg(send_message, cur_num, target_rank);
+				cur_pos = send_message + sizeof(int) + sizeof(int);
+				cur_num = 0;
 			}
 			std::this_thread::yield();
 		}
@@ -179,13 +180,10 @@ void NomadBody::train_send_func(const double timeout){
 
 	// send dying message to every machine
 	*(reinterpret_cast<int*>(send_message) + 1) = -(mpi_rank + 1);
+	cout << log_header << "send dying message" << endl;
 	for(int i = 0; i < mpi_size; i++){
 		//tbb::tick_count t = tbb::tick_count::now();
-		int rc = MPI_Ssend(send_message, msg_bytenum, MPI_CHAR, i, MsgType::DATA, MPI_COMM_WORLD);
-		if(rc != MPI_SUCCESS){
-			std::cerr << "SendTask MPI Error" << std::endl;
-			exit(64);
-		}
+		MPI_Ssend(send_message, msg_bytenum, MPI_CHAR, i, MsgType::DATA, MPI_COMM_WORLD);
 		//do_net_control_ratio(msg_bytenum, tbb::tick_count::now() - t);
 	}
 
