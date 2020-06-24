@@ -25,11 +25,13 @@ using namespace std;
 // Define message sending function
 /////////////////////////////////////////////////////////
 void NomadBody::_send_msg(char* send_message, const int cur_num, const int target_rank){
-	*(reinterpret_cast<int*>(send_message)) = static_cast<int>(send_queue.unsafe_size());
-	*(reinterpret_cast<int*>(send_message) + 1) = cur_num;
+	*(reinterpret_cast<int8_t*>(send_message)) = MsgType::DATA;
+	*(reinterpret_cast<int*>(send_message + 1)) = static_cast<int>(send_queue.unsafe_size());
+	*(reinterpret_cast<int*>(send_message + 1) + 1) = cur_num;
+	int bytes = cur_num == column_per_msg ? msg_bytenum : msg_head_bytenum + cur_num * unit_bytenum;
 	//cout << "W" << mpi_rank << ": send " << cur_num << " columns to " << target_rank << endl;
 	//tbb::tick_count t = tbb::tick_count::now();
-	int rc = MPI_Ssend(send_message, msg_bytenum, MPI_CHAR, target_rank, MsgType::DATA, MPI_COMM_WORLD);
+	int rc = MPI_Ssend(send_message, msg_bytenum, MPI_CHAR, target_rank, 0, MPI_COMM_WORLD);
 	if(rc != MPI_SUCCESS){
 		std::cerr << "SendTask MPI Error" << std::endl;
 		exit(64);
@@ -67,7 +69,6 @@ void NomadBody::train_send_func(const double timeout){
 
 	// Buffer some columns for one message. (# column>UNITS_PER_MSG || wait time>timeout)
 	while(true){
-
 		double elapsed_seconds = (tbb::tick_count::now() - start_time).seconds();
 		if((finished || elapsed_seconds > timeout) && !checkpointing){
 			break;
@@ -75,29 +76,43 @@ void NomadBody::train_send_func(const double timeout){
 
 		if(send_queue_force.try_pop(force_sent_signal)){
 			if(force_sent_signal.first == ColumnData::SIGNAL_CP_START){
-				int epoch = force_sent_signal.second;
+				char data[1 + sizeof(int)];
+				*reinterpret_cast<int8_t*>(data) = MsgType::CP_START;
+				*reinterpret_cast<int*>(data + 1) = force_sent_signal.second;
 				for(int i = 0; i < mpi_size; ++i)
-					MPI_Ssend(reinterpret_cast<void*>(&epoch), sizeof(epoch), MPI_CHAR, i, MsgType::CP_START, MPI_COMM_WORLD);
+					MPI_Ssend(reinterpret_cast<void*>(&data), sizeof(data), MPI_CHAR, i, 0, MPI_COMM_WORLD);
 			} else if(force_sent_signal.first == ColumnData::SIGNAL_CP_CLEAR){
-				int source = mpi_rank;
+				char data[1 + sizeof(int)];
+				*reinterpret_cast<int8_t*>(data) = MsgType::CP_CLEAR;
+				*reinterpret_cast<int*>(data + 1) = mpi_rank;
 				int target_rank = force_sent_signal.second;
-				MPI_Ssend(reinterpret_cast<void*>(&source), sizeof(source), MPI_CHAR, target_rank, MsgType::CP_CLEAR, MPI_COMM_WORLD);
+				MPI_Ssend(reinterpret_cast<void*>(&data), sizeof(data), MPI_CHAR, target_rank, 0, MPI_COMM_WORLD);
 			} else if(force_sent_signal.first == ColumnData::SIGNAL_CP_LFINISH){
-				int epoch = force_sent_signal.second;
-				MPI_Ssend(reinterpret_cast<void*>(&epoch), sizeof(epoch), MPI_CHAR, 0, MsgType::CP_LFINISH, MPI_COMM_WORLD);
+				// to master
+				char data[1 + sizeof(int)];
+				*reinterpret_cast<int8_t*>(data) = MsgType::CP_LFINISH;
+				*reinterpret_cast<int*>(data + 1) = force_sent_signal.second;
+				MPI_Ssend(reinterpret_cast<void*>(&data), sizeof(data), MPI_CHAR, 0, 0, MPI_COMM_WORLD);
 			} else if(force_sent_signal.first == ColumnData::SIGNAL_CP_RESUME){
-				int epoch = force_sent_signal.second;
+				char data[1 + sizeof(int)];
+				*reinterpret_cast<int8_t*>(data) = MsgType::CP_RESUME;
+				*reinterpret_cast<int*>(data + 1) = force_sent_signal.second;
 				for(int i = 0; i < mpi_size; ++i)
-					MPI_Ssend(reinterpret_cast<void*>(&epoch), sizeof(epoch), MPI_CHAR, i, MsgType::CP_RESUME, MPI_COMM_WORLD);
+					MPI_Ssend(reinterpret_cast<void*>(&data), sizeof(data), MPI_CHAR, i, 0, MPI_COMM_WORLD);
 			} else if(force_sent_signal.first == ColumnData::SIGNAL_LERROR){
-				char data[sizeof(double) + sizeof(long long)];
-				*reinterpret_cast<double*>(data) = tm_col_error_sum;
-				*reinterpret_cast<long long*>(data + sizeof(double)) = local_send_count;
-				MPI_Ssend(data, sizeof(data), MPI_CHAR, 0, MsgType::LOCAL_ERROR, MPI_COMM_WORLD);
+				// to master
+				char data[1 + sizeof(double) + sizeof(long long)];
+				*reinterpret_cast<int8_t*>(data) = MsgType::LOCAL_ERROR;
+				*reinterpret_cast<double*>(data + 1) = tm_col_error_sum;
+				*reinterpret_cast<long long*>(data + 1 + sizeof(double)) = local_send_count;
+				MPI_Ssend(reinterpret_cast<void*>(&data), sizeof(data), MPI_CHAR, 0, 0, MPI_COMM_WORLD);
 			} else if(force_sent_signal.first == ColumnData::SIGNAL_TERMINATE){
-				int cnt = force_sent_signal.second;
+				// from master
+				char data[1 + sizeof(int)];
+				*reinterpret_cast<int8_t*>(data) = MsgType::TERMINATION;
+				*reinterpret_cast<int*>(data + 1) = force_sent_signal.second;
 				for(int i = 0; i < mpi_size; ++i)
-					MPI_Ssend(reinterpret_cast<void*>(&cnt), sizeof(cnt), MPI_CHAR, i, MsgType::TERMINATION, MPI_COMM_WORLD);
+					MPI_Ssend(reinterpret_cast<void*>(&data), sizeof(data), MPI_CHAR, i, 0, MPI_COMM_WORLD);
 			}
 			cout << log_header << "send force: " << force_sent_signal.first << " - " << force_sent_signal.second << endl;
 			continue;
@@ -201,28 +216,86 @@ void NomadBody::train_recv_func(){
 	char* recv_message = sallocator<char>().allocate(msg_bytenum);
 
 	//const tick_count start_time = tick_count::now();
-	//int monitor_num = 0;
 
 	int num_dead = 0;
 
 	MPI_Status status;
 
 	while(num_dead < mpi_size){
-
-		//double elapsed_seconds = (tbb::tick_count::now() - start_time).seconds();
-		//if(monitor_num < elapsed_seconds){
-		//	cout << log_header << "receiver thread alive," << mpi_rank << "," << monitor_num << endl;
-		//	monitor_num++;
-		//}
-
 		int rc = MPI_Recv(recv_message, msg_bytenum, MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 		//do_net_control_delay();
-
 		if(rc != MPI_SUCCESS){
 			std::cerr << "ReceiveTask MPI Error" << std::endl;
 			exit(64);
 		}
 
+		int8_t mtype = *reinterpret_cast<int8_t*>(recv_message);
+		switch(mtype)
+		{
+		case MsgType::DATA:{
+			int queue_size = *(reinterpret_cast<int*>(recv_message + 1));
+			int num_received = *(reinterpret_cast<int*>(recv_message + 1) + 1);
+			//queue_current_sizes[status.MPI_SOURCE] = queue_size;
+
+			// negative numbers are dying messages
+			if(num_received < 0){
+				num_dead++;
+			} else{
+				char* cur_pos = recv_message + msg_head_bytenum;
+				int source = status.MPI_SOURCE;// * option->num_threads_;
+				for(int i = 0; i < num_received; i++){
+					ColumnData* p_col = column_pool->pop();
+					p_col->deserialize(cur_pos, dim);
+					p_col->source_ = source;
+
+					// generate permutation
+					p_col->set_perm(option->num_threads_, rng);
+
+					job_queues[p_col->perm_[0]].push(p_col);
+					cur_pos += unit_bytenum;
+				}
+			}
+			break;
+		}
+		case MsgType::TERMINATION:
+			flag_train_stop = true;
+			finished = true;
+			break;
+		case MsgType::LOCAL_ERROR:{
+			int source = status.MPI_SOURCE;
+			double local_error_sum = *reinterpret_cast<double*>(recv_message + 1);
+			long long local_update_count = *reinterpret_cast<long long*>(recv_message + 1 + sizeof(double));
+			sh_m_lerror(source, local_error_sum, local_update_count);
+			break;
+		}
+		case MsgType::CP_START:{
+			int epoch = *reinterpret_cast<int*>(recv_message + 1);
+			cp_shm_start(epoch);
+			break;
+		}
+		case MsgType::CP_CLEAR:{
+			int source = *reinterpret_cast<int*>(recv_message + 1);
+			cp_shm_clear(source);
+			break;
+		}
+		case MsgType::CP_LFINISH:{
+			// for master only
+			int epoch = *reinterpret_cast<int*>(recv_message + 1);
+			cp_sh_m_lfinish(epoch);
+			break;
+		}
+		case MsgType::CP_RESUME:{
+			int epoch = *reinterpret_cast<int*>(recv_message + 1);
+			cp_shm_resume(epoch);
+			break;
+		}
+		case MsgType::CP_RESTORE:{
+			break;
+		}
+		default:
+			break;
+		}
+		// TODO: change msg structure
 		if(status.MPI_TAG == MsgType::DATA){
 			int queue_size = *(reinterpret_cast<int*>(recv_message));
 			int num_received = *(reinterpret_cast<int*>(recv_message) + 1);
@@ -280,8 +353,7 @@ void NomadBody::test_send_func(){
 
 	const int dim = option->latent_dimension_;
 
-	//		const tick_count start_time = tick_count::now();
-	//		int monitor_num = 0;
+	//const tick_count start_time = tick_count::now();
 
 	char* send_message = sallocator<char>().allocate(msg_bytenum);
 	char* cur_pos = send_message + sizeof(int);
@@ -293,13 +365,6 @@ void NomadBody::test_send_func(){
 	target_rank %= mpi_size;
 
 	while(send_count < global_num_cols){
-
-		//			double elapsed_seconds = (tbb::tick_count::now() - start_time).seconds();
-		//			if(monitor_num < elapsed_seconds){
-		//				cout << log_header << "test sender thread alive: " << monitor_num << endl;
-		//				monitor_num++;
-		//			}
-
 		ColumnData* p_col;
 
 		if(send_queue.try_pop(p_col)){
@@ -380,8 +445,7 @@ void NomadBody::test_recv_func(){
 	const int dim = option->latent_dimension_;
 	char* recv_message = sallocator<char>().allocate(msg_bytenum);
 
-	//		const tick_count start_time = tick_count::now();
-	//		int monitor_num = 0;
+	//const tick_count start_time = tick_count::now();
 
 	int recv_count = 0;
 
@@ -390,15 +454,7 @@ void NomadBody::test_recv_func(){
 	const long mask = (1L << mpi_rank);
 
 	while(recv_count < global_num_cols){
-
-		//			double elapsed_seconds = (tbb::tick_count::now() - start_time).seconds();
-		//			if(monitor_num < elapsed_seconds){
-		//				cout << log_header << "receiver thread alive: "<< monitor_num << endl;
-		//				monitor_num++;
-		//			}
-
 		int rc = MPI_Recv(recv_message, msg_bytenum, MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-
 		if(rc != MPI_SUCCESS){
 			std::cerr << "ReceiveTask MPI Error" << std::endl;
 			exit(64);
@@ -415,10 +471,6 @@ void NomadBody::test_recv_func(){
 
 			ColumnData* p_col = column_pool->pop();
 			p_col->deserialize(cur_pos, dim);
-			//				p_col->col_index_ = *(reinterpret_cast<int *>(cur_pos));
-			//				p_col->flag_ = *(reinterpret_cast<long *>(cur_pos + sizeof(int)));
-			//				double *dest = reinterpret_cast<double *>(cur_pos + sizeof(int)+ sizeof(long));
-			//				std::copy(dest, dest + dim, p_col->values_);
 
 			if((mask & p_col->flag_) == 0){
 				job_queues[0].push(p_col);

@@ -120,7 +120,7 @@ void NomadBody::initial_net_data(){
 	// col_index + vector
 	unit_bytenum = sizeof(int) + sizeof(long) + sizeof(double) * option->latent_dimension_;
 	// current queue size + number of columns + columns
-	msg_bytenum = sizeof(int) + sizeof(int) + unit_bytenum * column_per_msg;
+	msg_bytenum = msg_head_bytenum + unit_bytenum * column_per_msg;
 }
 
 void NomadBody::initial_termcheck()

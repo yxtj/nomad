@@ -124,6 +124,7 @@ private:
 	// col_index + vector
 	int unit_bytenum;	//const
 	// current queue size + number of columns + columns
+	const int msg_head_bytenum = sizeof(int8_t) + sizeof(int) + sizeof(int);	//const
 	int msg_bytenum;	//const
 
 	long long local_send_count = 0;
