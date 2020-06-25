@@ -19,12 +19,8 @@ using namespace std;
 void NomadBody::_send_clear_signal(bool send2self, bool direct_send)
 {
 	if(direct_send){
-		for(int target_rank = 0; target_rank < mpi_size; ++target_rank){
-			// including itself
-			if(!send2self && target_rank == mpi_rank)
-				continue;
-			send_queue_force.emplace(ColumnData::SIGNAL_CP_CLEAR, target_rank);
-		}
+		// including itself
+		send_queue_force.emplace(ColumnData::SIGNAL_CP_CLEAR, cp_epoch);
 	} else{
 		ColumnData* p_col = column_pool->pop();
 		p_col->col_index_ = ColumnData::SIGNAL_CP_CLEAR; //set message type

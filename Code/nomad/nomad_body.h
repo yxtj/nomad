@@ -213,24 +213,27 @@ private:
 	void updater_func(int thread_index);
 
 	/////////////////////////////////////////////////////////
-	// Define Training Sender Thread
+	// Define Message Sending/Broadcasting Functions
 	/////////////////////////////////////////////////////////
-	void _send_msg(char* send_message, const int cur_num, const int target_rank);
-	void train_send_func(const double timeout);
+	void _send_data(char* send_message, const int cur_num, const int target_rank);
+	void _send_lerror(const double lerror, const long long nupdate);
+	void _bcast_dying();
+	void _bcast_termination(const int epoch);
+	void _bcast_cp_start(const int epoch);
+	void _bcast_cp_clear(const int epoch);
+	void _send_cp_lfinish(const int epoch);
+	void _bcast_cp_resume(const int epoch);
 
 	/////////////////////////////////////////////////////////
-	// Define Training Receive Function
+	// Define Training Threads
 	/////////////////////////////////////////////////////////
+	void train_send_func(const double timeout);
 	void train_recv_func();
 
 	/////////////////////////////////////////////////////////
-	// Define Testing Sender Thread
+	// Define Testing Threads
 	/////////////////////////////////////////////////////////
 	void test_send_func();
-
-	/////////////////////////////////////////////////////////
-	// Define Testing Receive Function
-	/////////////////////////////////////////////////////////
 	void test_recv_func();
 
 	/////////////////////////////////////////////////////////
