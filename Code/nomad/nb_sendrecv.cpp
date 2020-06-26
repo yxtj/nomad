@@ -200,7 +200,7 @@ void NomadBody::train_send_func(const double timeout){
 			cur_num++;
 
 			if(cur_num >= column_per_msg){
-				int target_rank = target_dist(send_rng);
+				int target_rank = option->flag_random_send ? target_dist(send_rng) : ((mpi_rank + 1) % mpi_size);
 				//cout << mpi_rank << " send" << endl;
 				_send_data(send_message, cur_num, target_rank);
 				cur_pos = send_message + msg_head_bytenum;

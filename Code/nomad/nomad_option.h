@@ -23,6 +23,7 @@ struct NomadOption {
 	//int pipeline_token_num_;
 	int num_reuse_;
 	bool flag_pause_;
+	bool flag_random_send;
 	double rank0_delay_;
 
 	std::string path_;

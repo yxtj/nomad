@@ -46,6 +46,8 @@ bool NomadOption::parse_command(int& argc, char**& argv) {
 			"number of column reuse")
 		("pause", value<bool>(&flag_pause_)->default_value(true),
 			"pause for a while after each timeout")
+		("random_send", value<bool>(&flag_random_send)->default_value(true),
+			"send columns to random a worker")
 		("r0delay", value<double>(&rank0_delay_)->default_value(0),
 			"arbitrary network delay added to communication of rank 0 machine")
 		("input,i", value<string>(&path_), "path of data")
