@@ -29,17 +29,11 @@ void NomadBody::_send_data(char* send_message, const int cur_num, const int targ
 	*(reinterpret_cast<int*>(send_message + 1)) = static_cast<int>(send_queue.unsafe_size());
 	*(reinterpret_cast<int*>(send_message + 1) + 1) = cur_num;
 	int bytes = cur_num == column_per_msg ? msg_bytenum : msg_head_bytenum + cur_num * unit_bytenum;
-	//cout << "W" << mpi_rank << ": send " << cur_num << " columns to " << target_rank << endl;
+	//cout << "W" << mpi_rank << "-S: data " << cur_num << " columns to " << target_rank << endl;
 	//tbb::tick_count t = tbb::tick_count::now();
 	//cout << log_header << "s: " << *(reinterpret_cast<int*>(send_message + 1)) << " - " << *(reinterpret_cast<int*>(send_message + 1) + 1) << endl;
-	int rc = MPI_Ssend(send_message, msg_bytenum, MPI_CHAR, target_rank, 0, MPI_COMM_WORLD);
-	if(rc != MPI_SUCCESS){
-		std::cerr << "SendTask MPI Error" << std::endl;
-		exit(64);
-	}
-
+	MPI_Ssend(send_message, bytes, MPI_CHAR, target_rank, 0, MPI_COMM_WORLD);
 	//do_net_control_ratio(msg_bytenum, tbb::tick_count::now() - t);
-
 	local_send_count += cur_num;
 }
 
@@ -49,8 +43,8 @@ void NomadBody::_send_lerror(const double lerror, const long long nupdate)
 	*reinterpret_cast<int8_t*>(data) = MsgType::LOCAL_ERROR;
 	*reinterpret_cast<double*>(data + 1) = tm_col_error_sum;
 	*reinterpret_cast<long long*>(data + 1 + sizeof(double)) = local_send_count;
+	//cout << "W" << mpi_rank << "-S: lerror " << tm_col_error_sum << " - " << local_send_count << endl;
 	MPI_Ssend(reinterpret_cast<void*>(&data), sizeof(data), MPI_CHAR, 0, 0, MPI_COMM_WORLD);
-
 }
 
 void NomadBody::_bcast_dying()
@@ -58,8 +52,10 @@ void NomadBody::_bcast_dying()
 	char data[1 + sizeof(int)];
 	*reinterpret_cast<int8_t*>(data) = MsgType::LOCAL_DYING;
 	*reinterpret_cast<int*>(data + 1) = -(mpi_rank + 1);
-	for(int i = 0; i < mpi_size; ++i)
+	for(int i = 0; i < mpi_size; ++i){
+		cout << "W" << mpi_rank << "-S: dying to " << i << endl;
 		MPI_Ssend(reinterpret_cast<void*>(&data), sizeof(data), MPI_CHAR, i, 0, MPI_COMM_WORLD);
+	}
 }
 
 void NomadBody::_bcast_termination(const int epoch)
@@ -139,6 +135,7 @@ void NomadBody::train_send_func(const double timeout){
 		}
 
 		if(send_queue_force.try_pop(force_sent_signal)){
+			cout << log_header << " force " << force_sent_signal.first << " - " << force_sent_signal.second << endl;
 			switch(force_sent_signal.first){
 			case ColumnData::SIGNAL_LERROR:
 				// to master
@@ -268,6 +265,8 @@ void NomadBody::train_recv_func(){
 		}
 
 		int8_t mtype = *reinterpret_cast<int8_t*>(recv_message);
+		if(mtype != MsgType::DATA)
+			cout << log_header << int(mtype) << endl;
 		switch(mtype)
 		{
 		case MsgType::DATA:{
@@ -336,6 +335,7 @@ void NomadBody::train_recv_func(){
 		}
 	}
 	sallocator<char>().deallocate(recv_message, msg_bytenum);
+	cout << log_header << "receive thread finishing" << endl;
 } // end receiving for train
 
 /////////////////////////////////////////////////////////
