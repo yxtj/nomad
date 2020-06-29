@@ -47,18 +47,25 @@ void NomadBody::initial_dataset()
 	local_thread_num_nonzero.assign(option->num_threads_, 0ll);
 	for(int thread_index = 0; thread_index < option->num_threads_; ++thread_index){
 		int part_index = mpi_rank * option->num_threads_ + thread_index;
-		bool succeed = load_train(option->path_, part_index, num_parts, thread_index == 0, dstrain[thread_index]);
-		//min_row_index, local_num_rows, train_col_offset, train_row_idx, train_row_val);
-		if(succeed == false){
-			LOG(ERROR) << "error in reading training file" << endl;
-			exit(11);
+		{
+			bool succeed = load_train(option->path_, part_index, num_parts, dstrain[thread_index]);
+			//min_row_index, local_num_rows, train_col_offset, train_row_idx, train_row_val);
+			Data& d = dstrain[thread_index];
+			LOG(INFO) << "Train data part " << part_index << ": "
+				<< "nrows: " << d.num_rows << ", ncols: " << d.num_cols << ", total_nnz: " << d.num_nonzero << ", "
+				<< "min_row: " << d.min_row_index << ", max_row: " << d.min_row_index + d.local_num_rows << ", "
+				<< "nnz: " << d.local_num_nonzero << endl;
+			LOG_IF(FATAL, !succeed) << "error in reading training file" << endl;
 		}
-
-		succeed = load_test(option->path_, part_index, num_parts, thread_index == 0, dstest[thread_index]);
-		//min_row_index, local_num_rows, test_col_offset, test_row_idx, test_row_val);
-		if(succeed == false){
-			LOG(ERROR) << "error in reading testing file" << endl;
-			exit(11);
+		{
+			bool succeed = load_test(option->path_, part_index, num_parts, dstest[thread_index]);
+			//min_row_index, local_num_rows, test_col_offset, test_row_idx, test_row_val);
+			Data& d = dstrain[thread_index];
+			LOG(INFO) << "Test data part " << part_index << ": "
+				<< "nrows: " << d.num_rows << ", ncols: " << d.num_cols << ", total_nnz: " << d.num_nonzero << ", "
+				<< "min_row: " << d.min_row_index << ", max_row: " << d.min_row_index + d.local_num_rows << ", "
+				<< "nnz: " << d.local_num_nonzero << endl;
+			LOG_IF(FATAL, !succeed) << "error in reading test file" << endl;
 		}
 		global_num_cols = dstrain[thread_index].num_cols;
 		global_num_rows = dstrain[thread_index].num_rows;

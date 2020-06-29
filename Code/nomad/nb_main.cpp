@@ -46,7 +46,9 @@ int NomadBody::run(NomadOption* opt){
 			master_cp_thread = new std::thread(std::bind(&NomadBody::master_checkpoint, this));
 		}
 		master_tm_thread = new std::thread(std::bind(&NomadBody::master_termcheck, this));
+#ifndef NDEBUG
 		cin.get();
+#endif
 	}
 
 	wait_number = 0;

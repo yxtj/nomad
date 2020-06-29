@@ -17,7 +17,6 @@
 using namespace std;
 
 static bool read_data(const string filename, int part_index, int num_parts,
-	bool show_info,
 	int& min_row_index,
 	int& local_num_rows,
 	long long& local_num_nonzero,
@@ -96,14 +95,6 @@ static bool read_data(const string filename, int part_index, int num_parts,
 	long long begin_skip = std::accumulate(total_nnz_rows, total_nnz_rows + min_row, 0LL);
 	local_num_nonzero = std::accumulate(total_nnz_rows + min_row, total_nnz_rows + max_row, 0LL);
 	long long end_skip = total_nnz - local_num_nonzero - begin_skip;
-
-	// BUGBUG: this is just for debugging purpose
-	
-	if(show_info){
-		LOG(INFO) << "nrows: " << nrows << ", ncols: " << ncols << ", total_nnz: " << total_nnz << ", "
-			<< "min_row: " << min_row << ", max_row: " << max_row << ", "
-			<< "begin_skip: " << begin_skip << ", nnz: " << local_num_nonzero << endl;
-	}
 
 	// Skip over the begin_nnz number of column indices in the file
 	data_file.seekg(begin_skip * sizeof(int), std::ios_base::cur);
@@ -207,13 +198,11 @@ int NomadBody::get_num_cols(const std::string& path){
 }
 
 bool NomadBody::load_train(const std::string& path,
-	int part_index, int num_parts, bool show_info,
-	Data& d
+	int part_index, int num_parts, Data& d
 ){
 
 	const string train_filename = path + "/train.dat";
 	return read_data(train_filename, part_index, num_parts,
-		show_info,
 		d.min_row_index, d.local_num_rows, d.local_num_nonzero,
 		d.col_offset, d.row_idx, d.row_val,
 		d.num_rows, d.num_cols, d.num_nonzero);
@@ -221,13 +210,11 @@ bool NomadBody::load_train(const std::string& path,
 }
 
 bool NomadBody::load_test(const std::string& path,
-	int part_index, int num_parts, bool show_info,
-	Data& d
+	int part_index, int num_parts, Data& d
 ){
 
 	const string test_filename = path + "/test.dat";
 	return read_data(test_filename, part_index, num_parts,
-		show_info,
 		d.min_row_index, d.local_num_rows, d.local_num_nonzero,
 		d.col_offset, d.row_idx, d.row_val,
 		d.num_rows, d.num_cols, d.num_nonzero);

@@ -40,6 +40,7 @@ struct Data{
 	long long num_nonzero;
 
 	int min_row_index;
+	int max_row_index;
 	int local_num_rows;
 	long long local_num_nonzero;
 };
@@ -48,14 +49,10 @@ class NomadBody{
 
 protected:
 	bool load_train(const std::string& path,
-		int part_index, int num_parts, bool show_info,
-		Data& data
-	);
+		int part_index, int num_parts, Data& data);
 
 	bool load_test(const std::string& path,
-		int part_index, int num_parts, bool show_info,
-		Data& data
-	);
+		int part_index, int num_parts, Data& data);
 
 	// data members:
 private:
