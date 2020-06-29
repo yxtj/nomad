@@ -1,16 +1,13 @@
 #include "nomad_body.h"
 
 #include <tbb/tbb.h>
-//#define TBB_IMPLEMENT_CPP0X
-//#include <tbb/compat/thread>
-
-#include <iostream>
 #include <string>
 #include <cmath>
 #include <algorithm>
 #include <random>
 
 #include <boost/format.hpp>
+#include <glog/logging.h>
 
 #include "mpi.h"
 #if defined(WIN32) || defined(_WIN32)
@@ -26,7 +23,7 @@ bool NomadBody::initial_mpi(){
 	int mpi_thread_provided;
 	MPI_Init_thread(nullptr, nullptr, MPI_THREAD_MULTIPLE, &mpi_thread_provided);
 	if(mpi_thread_provided != MPI_THREAD_MULTIPLE && mpi_thread_provided != MPI_THREAD_SERIALIZED){
-		cerr << "MPI multiple thread not provided!!! (" << mpi_thread_provided << " != "
+		LOG(ERROR) << "MPI multiple thread not provided!!! (" << mpi_thread_provided << " != "
 			<< MPI_THREAD_MULTIPLE << " or " << MPI_THREAD_SERIALIZED << ")" << endl;
 		return false;
 	}
@@ -53,14 +50,14 @@ void NomadBody::initial_dataset()
 		bool succeed = load_train(option->path_, part_index, num_parts, thread_index == 0, dstrain[thread_index]);
 		//min_row_index, local_num_rows, train_col_offset, train_row_idx, train_row_val);
 		if(succeed == false){
-			cerr << "error in reading training file" << endl;
+			LOG(ERROR) << "error in reading training file" << endl;
 			exit(11);
 		}
 
 		succeed = load_test(option->path_, part_index, num_parts, thread_index == 0, dstest[thread_index]);
 		//min_row_index, local_num_rows, test_col_offset, test_row_idx, test_row_val);
 		if(succeed == false){
-			cerr << "error in reading testing file" << endl;
+			LOG(ERROR) << "error in reading testing file" << endl;
 			exit(11);
 		}
 		global_num_cols = dstrain[thread_index].num_cols;
@@ -181,11 +178,11 @@ bool NomadBody::initial(NomadOption* opt){
 	if(!initial_mpi())
 		return false;
 	log_header = "W" + to_string(mpi_rank) + ": ";
-	cout << log_header << boost::format("processor name: %s, number of tasks: %d, rank: %d") % hostname % mpi_size % mpi_rank << endl;
+	LOG(INFO) << log_header << boost::format("processor name: %s, number of tasks: %d, rank: %d") % hostname % mpi_size % mpi_rank << endl;
 
 	num_parts = mpi_size * option->num_threads_;
 
-	cout << log_header << "number of threads: " << option->num_threads_ << ", number of parts: " << num_parts << endl;
+	LOG(INFO) << log_header << "number of threads: " << option->num_threads_ << ", number of parts: " << num_parts << endl;
 
 	initial_dataset();
 	// global_num_cols and global_num_nonzero are ready now.

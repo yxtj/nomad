@@ -1,10 +1,10 @@
 #include "nomad_body.h"
 
-#include <iostream>
 #include <vector>
 #include <fstream>
 #include <numeric>
 #include <algorithm>
+#include <glog/logging.h>
 
 #if defined(WIN32) || defined(_WIN32)
 #undef min
@@ -35,7 +35,7 @@ static bool read_data(const string filename, int part_index, int num_parts,
 	// read the ID of the file to figure out whether it is normal file format
 	// or long file format
 	if(!data_file.read(reinterpret_cast<char*>(&file_id), sizeof(int))){
-		cerr << "Error in reading ID from file" << endl;
+		LOG(ERROR) << "Error in reading ID from file" << endl;
 		return false;
 	}
 
@@ -44,7 +44,7 @@ static bool read_data(const string filename, int part_index, int num_parts,
 		int header[3];
 
 		if(!data_file.read(reinterpret_cast<char*>(header), 3 * sizeof(int))){
-			cerr << "Error in reading header from file" << endl;
+			LOG(ERROR) << "Error in reading header from file" << endl;
 			return false;
 		}
 
@@ -57,7 +57,7 @@ static bool read_data(const string filename, int part_index, int num_parts,
 		int header[2];
 
 		if(!data_file.read(reinterpret_cast<char*>(header), 2 * sizeof(int))){
-			cerr << "Error in reading header from file" << endl;
+			LOG(ERROR) << "Error in reading header from file" << endl;
 			return false;
 		}
 
@@ -65,16 +65,16 @@ static bool read_data(const string filename, int part_index, int num_parts,
 		ncols = header[1];
 
 		if(!data_file.read(reinterpret_cast<char*>(&total_nnz), sizeof(long long))){
-			cerr << "Error in reading nnz from file" << endl;
+			LOG(ERROR) << "Error in reading nnz from file" << endl;
 			return false;
 		}
 
 	} else{
-		cerr << file_id << " does not identify a valid binary matrix file!" << endl;
+		LOG(ERROR) << file_id << " does not identify a valid binary matrix file!" << endl;
 		exit(1);
 	}
 
-	//cout << "nrows: " << nrows << ", ncols: " << ncols << ", total_nnz: " << total_nnz << endl;
+	//LOG(INFO) << "nrows: " << nrows << ", ncols: " << ncols << ", total_nnz: " << total_nnz << endl;
 
 	// calculate how many number of rows is to be stored locally
 	const int num_rows_per_part = nrows / num_parts + ((nrows % num_parts > 0) ? 1 : 0);
@@ -87,7 +87,7 @@ static bool read_data(const string filename, int part_index, int num_parts,
 
 	int* total_nnz_rows = sallocator<int>().allocate(nrows);
 	if(!data_file.read(reinterpret_cast<char*>(total_nnz_rows), nrows * sizeof(int))){
-		cerr << "Error in reading nnz values from file!" << endl;
+		LOG(ERROR) << "Error in reading nnz values from file!" << endl;
 		return false;
 	}
 
@@ -100,7 +100,7 @@ static bool read_data(const string filename, int part_index, int num_parts,
 	// BUGBUG: this is just for debugging purpose
 	
 	if(show_info){
-		cout << "nrows: " << nrows << ", ncols: " << ncols << ", total_nnz: " << total_nnz << ", "
+		LOG(INFO) << "nrows: " << nrows << ", ncols: " << ncols << ", total_nnz: " << total_nnz << ", "
 			<< "min_row: " << min_row << ", max_row: " << max_row << ", "
 			<< "begin_skip: " << begin_skip << ", nnz: " << local_num_nonzero << endl;
 	}
@@ -108,29 +108,29 @@ static bool read_data(const string filename, int part_index, int num_parts,
 	// Skip over the begin_nnz number of column indices in the file
 	data_file.seekg(begin_skip * sizeof(int), std::ios_base::cur);
 
-	//cout << "read column indices" << endl;
+	//LOG(INFO) << "read column indices" << endl;
 
 	int* col_idx = sallocator<int>().allocate(local_num_nonzero);
 	if(!data_file.read(reinterpret_cast<char*>(col_idx), local_num_nonzero * sizeof(int))){
-		cerr << "Error in reading column indices from file!" << endl;
+		LOG(ERROR) << "Error in reading column indices from file!" << endl;
 		return false;
 	}
 
 	// Skip over remaining nnz and the beginning of data as well
 	data_file.seekg(end_skip * sizeof(int) + begin_skip * sizeof(double), std::ios_base::cur);
 
-	//cout << "read values" << endl;
+	//LOG(INFO) << "read values" << endl;
 
 	double* col_val = sallocator<double>().allocate(local_num_nonzero);
 	if(!data_file.read(reinterpret_cast<char*>(col_val), local_num_nonzero * sizeof(double))){
-		cerr << "Error in reading matrix values from file" << endl;
+		LOG(ERROR) << "Error in reading matrix values from file" << endl;
 		exit(1);
 	}
 
 	data_file.close();
 
 	// Now convert everything to column major format
-	//cout << "form column-wise data structure" << endl;
+	//LOG(INFO) << "form column-wise data structure" << endl;
 
 	// First create vector of vectors
 	vector<vector<int>, sallocator<int> > row_idx_vec(ncols);
@@ -155,7 +155,7 @@ static bool read_data(const string filename, int part_index, int num_parts,
 	sallocator<double>().deallocate(col_val, local_num_nonzero);
 	sallocator<int>().deallocate(total_nnz_rows, nrows);
 
-	//cout << "form CSC" << endl;
+	//LOG(INFO) << "form CSC" << endl;
 
 	// Now convert everything into CSC format
 
@@ -193,7 +193,7 @@ int NomadBody::get_num_cols(const std::string& path){
 		int header[4];
 
 		if(!data_file.read(reinterpret_cast<char*>(header), 4 * sizeof(int))){
-			cerr << "Error in reading ID from file" << endl;
+			LOG(ERROR) << "Error in reading ID from file" << endl;
 			exit(11);
 		}
 

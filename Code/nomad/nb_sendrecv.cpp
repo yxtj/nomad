@@ -1,10 +1,7 @@
 #include "nomad_body.h"
 
 #include <tbb/tbb.h>
-//#define TBB_IMPLEMENT_CPP0X
-//#include <tbb/compat/thread>
 
-#include <iostream>
 #include <string>
 #include <cmath>
 #include <algorithm>
@@ -12,6 +9,7 @@
 #include <random>
 
 #include <boost/format.hpp>
+#include <glog/logging.h>
 
 #include "mpi.h"
 #if defined(WIN32) || defined(_WIN32)
@@ -29,9 +27,9 @@ void NomadBody::_send_data(char* send_message, const int cur_num, const int targ
 	*(reinterpret_cast<int*>(send_message + 1)) = static_cast<int>(send_queue.unsafe_size());
 	*(reinterpret_cast<int*>(send_message + 1) + 1) = cur_num;
 	int bytes = cur_num == column_per_msg ? msg_bytenum : msg_head_bytenum + cur_num * unit_bytenum;
-	//cout << "W" << mpi_rank << "-S: data " << cur_num << " columns to " << target_rank << endl;
+	//LOG(INFO) << "W" << mpi_rank << "-S: data " << cur_num << " columns to " << target_rank << endl;
 	//tbb::tick_count t = tbb::tick_count::now();
-	//cout << log_header << "s: " << *(reinterpret_cast<int*>(send_message + 1)) << " - " << *(reinterpret_cast<int*>(send_message + 1) + 1) << endl;
+	//LOG(INFO) << log_header << "s: " << *(reinterpret_cast<int*>(send_message + 1)) << " - " << *(reinterpret_cast<int*>(send_message + 1) + 1) << endl;
 	MPI_Ssend(send_message, bytes, MPI_CHAR, target_rank, 0, MPI_COMM_WORLD);
 	//do_net_control_ratio(msg_bytenum, tbb::tick_count::now() - t);
 	local_send_count += cur_num;
@@ -43,7 +41,7 @@ void NomadBody::_send_lerror(const double lerror, const long long nupdate)
 	*reinterpret_cast<int8_t*>(data) = MsgType::LOCAL_ERROR;
 	*reinterpret_cast<double*>(data + 1) = tm_col_error_sum;
 	*reinterpret_cast<long long*>(data + 1 + sizeof(double)) = local_send_count;
-	//cout << "W" << mpi_rank << "-S: lerror " << tm_col_error_sum << " - " << local_send_count << endl;
+	//LOG(INFO) << "W" << mpi_rank << "-S: lerror " << tm_col_error_sum << " - " << local_send_count << endl;
 	MPI_Ssend(reinterpret_cast<void*>(&data), sizeof(data), MPI_CHAR, 0, 0, MPI_COMM_WORLD);
 }
 
@@ -53,7 +51,7 @@ void NomadBody::_bcast_dying()
 	*reinterpret_cast<int8_t*>(data) = MsgType::LOCAL_DYING;
 	*reinterpret_cast<int*>(data + 1) = -(mpi_rank + 1);
 	for(int i = 0; i < mpi_size; ++i){
-		cout << "W" << mpi_rank << "-S: dying to " << i << endl;
+		LOG(INFO) << "W" << mpi_rank << "-S: dying to " << i << endl;
 		MPI_Ssend(reinterpret_cast<void*>(&data), sizeof(data), MPI_CHAR, i, 0, MPI_COMM_WORLD);
 	}
 }
@@ -135,7 +133,7 @@ void NomadBody::train_send_func(const double timeout){
 		}
 
 		if(send_queue_force.try_pop(force_sent_signal)){
-			cout << log_header << " force " << force_sent_signal.first << " - " << force_sent_signal.second << endl;
+			LOG(INFO) << log_header << " force " << force_sent_signal.first << " - " << force_sent_signal.second << endl;
 			switch(force_sent_signal.first){
 			case ColumnData::SIGNAL_LERROR:
 				// to master
@@ -164,7 +162,7 @@ void NomadBody::train_send_func(const double timeout){
 				_bcast_cp_resume(force_sent_signal.second);
 				break;
 			default:
-				cout << log_header << "Unsupported signal type: " << force_sent_signal.first << endl;
+				LOG(INFO) << log_header << "Unsupported signal type: " << force_sent_signal.first << endl;
 				break;
 			}
 			continue;
@@ -201,7 +199,7 @@ void NomadBody::train_send_func(const double timeout){
 
 			if(cur_num >= column_per_msg){
 				int target_rank = option->flag_random_send ? target_dist(send_rng) : ((mpi_rank + 1) % mpi_size);
-				//cout << mpi_rank << " send" << endl;
+				//LOG(INFO) << mpi_rank << " send" << endl;
 				_send_data(send_message, cur_num, target_rank);
 				cur_pos = send_message + msg_head_bytenum;
 				cur_num = 0;
@@ -235,11 +233,11 @@ void NomadBody::train_send_func(const double timeout){
 	}
 
 	// send dying message to every machine
-	cout << log_header << "send dying message" << endl;
+	LOG(INFO) << log_header << "send dying message" << endl;
 	_bcast_dying();
 
 	sallocator<char>().deallocate(send_message, msg_bytenum);
-	cout << log_header << "send thread finishing" << endl;
+	LOG(INFO) << log_header << "send thread finishing" << endl;
 } //end of train_send_func
 
 /////////////////////////////////////////////////////////
@@ -260,19 +258,19 @@ void NomadBody::train_recv_func(){
 		int rc = MPI_Recv(recv_message, msg_bytenum, MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 		//do_net_control_delay();
 		if(rc != MPI_SUCCESS){
-			std::cerr << "ReceiveTask MPI Error" << std::endl;
+			LOG(ERROR) << "ReceiveTask MPI Error" << std::endl;
 			exit(64);
 		}
 
 		int8_t mtype = *reinterpret_cast<int8_t*>(recv_message);
 		if(mtype != MsgType::DATA)
-			cout << log_header << int(mtype) << endl;
+			LOG(INFO) << log_header << int(mtype) << endl;
 		switch(mtype)
 		{
 		case MsgType::DATA:{
 			int queue_size = *(reinterpret_cast<int*>(recv_message + 1));
 			int num_received = *(reinterpret_cast<int*>(recv_message + 1) + 1);
-			//cout << log_header << "r: " << queue_size << " - " << num_received << endl;
+			//LOG(INFO) << log_header << "r: " << queue_size << " - " << num_received << endl;
 			//queue_current_sizes[status.MPI_SOURCE] = queue_size;
 
 			// negative numbers are dying messages
@@ -335,7 +333,7 @@ void NomadBody::train_recv_func(){
 		}
 	}
 	sallocator<char>().deallocate(recv_message, msg_bytenum);
-	cout << log_header << "receive thread finishing" << endl;
+	LOG(INFO) << log_header << "receive thread finishing" << endl;
 } // end receiving for train
 
 /////////////////////////////////////////////////////////
@@ -380,7 +378,7 @@ void NomadBody::test_send_func(){
 					int rc = MPI_Ssend(send_message, msg_bytenum, MPI_CHAR, target_rank, MsgType::DATA, MPI_COMM_WORLD);
 
 					if(rc != MPI_SUCCESS){
-						std::cerr << "SendTask MPI Error" << std::endl;
+						LOG(ERROR) << "SendTask MPI Error" << std::endl;
 						exit(64);
 					}
 
@@ -390,7 +388,7 @@ void NomadBody::test_send_func(){
 				}
 
 			} else{
-				cout << log_header << "!!! should not happen! flag:" << p_col->flag_ << "???" << endl;
+				LOG(INFO) << log_header << "!!! should not happen! flag:" << p_col->flag_ << "???" << endl;
 			}
 			column_pool->push(p_col);
 
@@ -401,7 +399,7 @@ void NomadBody::test_send_func(){
 				// choose destination
 				int rc = MPI_Ssend(send_message, msg_bytenum, MPI_CHAR, target_rank, MsgType::DATA, MPI_COMM_WORLD);
 				if(rc != MPI_SUCCESS){
-					std::cerr << "SendTask MPI Error" << std::endl;
+					LOG(ERROR) << "SendTask MPI Error" << std::endl;
 					exit(64);
 				}
 
@@ -420,14 +418,14 @@ void NomadBody::test_send_func(){
 		int rc = MPI_Ssend(send_message, msg_bytenum, MPI_CHAR, target_rank, MsgType::DATA, MPI_COMM_WORLD);
 
 		if(rc != MPI_SUCCESS){
-			std::cerr << "SendTask MPI Error" << std::endl;
+			LOG(ERROR) << "SendTask MPI Error" << std::endl;
 			exit(64);
 		}
 	}
 
 	sallocator<char>().deallocate(send_message, msg_bytenum);
 
-	cout << log_header << "test send thread finishing" << endl;
+	LOG(INFO) << log_header << "test send thread finishing" << endl;
 
 } // end of test_send_func
 
@@ -450,11 +448,11 @@ void NomadBody::test_recv_func(){
 	while(recv_count < global_num_cols){
 		int rc = MPI_Recv(recv_message, msg_bytenum, MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 		if(rc != MPI_SUCCESS){
-			std::cerr << "ReceiveTask MPI Error" << std::endl;
+			LOG(ERROR) << "ReceiveTask MPI Error" << std::endl;
 			exit(64);
 		}
 		if(status.MPI_TAG != MsgType::DATA){
-			cout << log_header << "received a signal while testing. signal " << status.MPI_TAG << ", from " << status.MPI_SOURCE << endl;
+			LOG(INFO) << log_header << "received a signal while testing. signal " << status.MPI_TAG << ", from " << status.MPI_SOURCE << endl;
 			continue;
 		}
 

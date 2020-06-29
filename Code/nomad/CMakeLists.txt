@@ -41,7 +41,6 @@ else ()
 	set(CMAKE_CXX_FLAGS_RELEASE "-Wall -fsigned-char")
 endif ()
 
-
 # Locate Boost
 find_package(Boost REQUIRED COMPONENTS filesystem system program_options)
 include_directories( ${Boost_INCLUDE_DIR} )
@@ -52,13 +51,24 @@ message(STATUS "Boost_LIBRARIES: ${Boost_LIBRARIES}")
 find_package (Threads)
 message(STATUS "Thread lib: ${CMAKE_THREAD_LIBS_INIT}")
 
+# Locate logging library
+find_package(Glog)
+if(${Glog_FOUND})
+	set(GLOG_LIBS "glog::glog")
+else()
+	find_library(GLOG_LIBS glog)
+endif()
+message(STATUS "glog: ${Glog_FOUND}, ${Glog_INCLUDE_DIRS}, ${Glog_INCLUDES}, ${Glog_LIBARIES}, ${Glog_LIBS}, ${GLOG_LIBS}")
+include_directories( ${Glog_INCLUDE_DIRS} )
+link_libraries(${Glog_LIBARIES} )
+
 add_executable(nomad
 	main.cpp
 	nomad_option.cpp pool.cpp
 	nb_data.cpp nb_init.cpp nb_main.cpp nb_master.cpp nb_sendrecv.cpp
 	nb_net_control.cpp  nb_checkpoint.cpp
 )
-target_link_libraries(nomad ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(nomad ${CMAKE_THREAD_LIBS_INIT} ${GLOG_LIBS})
 
 add_executable(synthgen synthgen.cpp)
 add_executable(synthgen_conf synthgen-conf.cpp)

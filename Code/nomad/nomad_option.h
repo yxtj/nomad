@@ -38,6 +38,8 @@ struct NomadOption {
 	double net_ratio;
 	std::string net_ratio_str;
 
+	int verbose_level;
+
 	bool parse_command(int& argc, char**& argv);
 
 private:
