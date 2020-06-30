@@ -32,8 +32,8 @@ void NomadBody::master_termcheck()
 		double rmse = sqrt(sum / global_num_nonzero);
 		diff = abs(rmse - global_error);
 		double time = (tbb::tick_count::now() - start_time).seconds();
-		LOG(INFO) << boost::format("M: termination check at %.2lf: last RMSE: %g new RMSE: %g difference: %g")
-			% time % global_error % rmse % diff;
+		LOG(INFO) << boost::format("M: termination check at %.2lf: last RMSE: %g, new RMSE: %g, difference: %g, update: %ld")
+			% time % global_error % rmse % diff % tm_global_update_count;
 		global_error = rmse;
 	}
 	LOG(INFO) << "M: send terimination signal";
