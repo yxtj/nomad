@@ -32,6 +32,8 @@ bool NomadOption::parse_command(int& argc, char**& argv) {
 		("timeout,t",
 			value<vector<double> >(&timeouts_)->multitoken()->default_value(vector<double>(1, 10.0), "10.0"),
 			"timeout seconds until completion")
+		("tm_value,a", value<double>(&stop_rmse)->default_value(1, "1"),
+			"the RMSE to stop training")
 		("tm_error,e", value<double>(&min_error)->default_value(1e-6, "1e-6"),
 			"the minimal error to stop")
 		("tm_interval", value<double>(&report_interval)->default_value(1),

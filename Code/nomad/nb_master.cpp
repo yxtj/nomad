@@ -17,7 +17,7 @@ void NomadBody::master_termcheck()
 	tbb::tick_count start_time = tbb::tick_count::now();
 	global_error = numeric_limits<double>::infinity();
 	double diff = numeric_limits<double>::infinity();
-	while(!finished && diff > option->min_error){
+	while(!finished && diff > option->min_error && global_error > option->stop_rmse){
 		std::unique_lock<std::mutex> lk(tm_m);
 		tm_cv.wait(lk);
 		if(finished)
