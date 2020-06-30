@@ -673,7 +673,7 @@ void NomadBody::updater_func(int thread_index){
 			for(int t = 0; t < dim; t++){
 				ofs << "," << row[t];
 			}
-			ofs;
+			ofs << "\n";
 		}
 		ofs.close();
 
