@@ -152,6 +152,7 @@ void NomadBody::initial_cp(){
 	cp_epoch = -1;
 	cp_ut_wait_counter = 0;
 	checkpointing = false;
+	cp_received_clear.assign(mpi_size, false);
 	cp_received_clear_counter = 0;
 	//received_flush.resize(option->num_threads_, vector<bool>(num_parts, false));
 	cp_need_archive_msg_from.resize(option->num_threads_);

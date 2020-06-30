@@ -223,6 +223,7 @@ void NomadBody::cp_shm_clear(int epoch, int source)
 				cp_action_ready[i] = true;
 		}
 	} else if(option->cp_type_ == "async"){
+		cp_received_clear[source] = true;
 		_send_sig2threads_clear(source);
 	} else if(option->cp_type_ == "vs"){
 		++cp_received_clear_counter;
@@ -247,8 +248,10 @@ void NomadBody::cp_shm_resume(int epoch)
 	} else if(option->cp_type_ == "async"){
 		for(int i = 0; i < option->num_threads_; ++i){
 			cp_need_archive_msg_counter[i] = 0;
-			for(int j = 0; j < mpi_size; ++j)
+			for(int j = 0; j < mpi_size; ++j){
 				cp_need_archive_msg_from[i][j] = false;
+				cp_received_clear[j] = false;
+			}
 		}
 	} else if(option->cp_type_ == "vs"){
 		allow_sending = true;
@@ -272,8 +275,10 @@ void NomadBody::cp_sht_start(int thread_index, int part_index, int epoch, double
 		_sync_all_update_thread();
 		archive_local(thread_index, latent_rows, local_num_rows);
 		cp_fmsgs[thread_index] = new ofstream(gen_cp_file_name(part_index) + ".msg", ofstream::binary);
-		for(int i = 0; i < mpi_size; ++i)
-			cp_need_archive_msg_from[thread_index][i] = true;
+		for(int i = 0; i < mpi_size; ++i){
+			if(cp_received_clear[i] == false)
+				cp_need_archive_msg_from[thread_index][i] = true;
+		}
 		if(thread_index == 0){
 			_send_clear_signal(false);
 		}

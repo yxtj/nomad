@@ -132,6 +132,7 @@ private:
 	atomic<bool> checkpointing;
 	atomic<int> cp_ut_wait_counter;
 	atomic<bool>* cp_action_ready; // each thread
+	vector<bool> cp_received_clear;
 	atomic<int> cp_received_clear_counter;
 	vector<atomic<bool>*> cp_need_archive_msg_from; // each thread - mpi instance
 	atomic<int>* cp_need_archive_msg_counter; // each thread
