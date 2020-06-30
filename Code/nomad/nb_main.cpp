@@ -453,7 +453,7 @@ void NomadBody::updater_func(int thread_index){
 		// Training
 		/////////////////////////////////////////////////////////
 
-		while(flag_train_stop == false){
+		while(flag_train_stop == false || checkpointing == true){
 			if(cp_action_ready[thread_index]){
 				cp_update_func_action(thread_index, part_index, latent_rows, local_num_rows);
 				cp_action_ready[thread_index] = false;
