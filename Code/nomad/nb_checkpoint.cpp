@@ -89,7 +89,7 @@ void NomadBody::_archive_msg_queue(int thread_index, const string& suffix, colqu
 
 void NomadBody::arhive_job_queue(int thread_index, bool locked)
 {
-	VLOG(2) << "W" << mpi_rank << ": archive job queue";
+	VLOG(2) << "W" << mpi_rank << "-" << thread_index << ": archive job queue";
 	_archive_msg_queue(thread_index, ".msg", job_queues[thread_index], locked);
 }
 
@@ -195,7 +195,7 @@ void NomadBody::_sync_all_update_thread()
 
 void NomadBody::cp_shm_start(int epoch)
 {
-	VLOG(1) << mpi_rank << " m start";
+	VLOG(1) << "W" << mpi_rank << " m start";
 	cp_time_total_timer = tbb::tick_count::now();
 	cp_epoch = epoch;
 	checkpointing = true;
@@ -216,7 +216,7 @@ void NomadBody::cp_shm_start(int epoch)
 
 void NomadBody::cp_shm_clear(int epoch, int source)
 {
-	VLOG(1) << mpi_rank << " m clear " << source;
+	VLOG(1) << "W" << mpi_rank << " m clear " << source;
 	LOG_IF(FATAL, epoch != cp_epoch) << "epoch of checkpoint does not match: " << cp_epoch << " vs " << epoch;
 	if(option->cp_type_ == "sync"){
 		++cp_received_clear_counter;
@@ -241,7 +241,7 @@ void NomadBody::cp_shm_clear(int epoch, int source)
 
 void NomadBody::cp_shm_resume(int epoch)
 {
-	VLOG(1) << mpi_rank << " m resume";
+	VLOG(1) << "W" << mpi_rank << " m resume";
 	LOG_IF(FATAL, epoch != cp_epoch) << "epoch of checkpoint does not match: " << cp_epoch << " vs " << epoch;
 	if(option->cp_type_ == "sync"){
 		allow_processing = true;
@@ -267,7 +267,7 @@ void NomadBody::cp_shm_resume(int epoch)
 
 void NomadBody::cp_sht_start(int thread_index, int part_index, int epoch, double* latent_rows, int local_num_rows)
 {
-	VLOG(2) << mpi_rank << "-" << thread_index << " t start";
+	VLOG(2) << "W" << mpi_rank << "-" << thread_index << " t start";
 	if(option->cp_type_ == "sync"){
 		// nothing
 	} else if(option->cp_type_ == "async"){
@@ -288,7 +288,7 @@ void NomadBody::cp_sht_start(int thread_index, int part_index, int epoch, double
 
 void NomadBody::cp_sht_clear(int thread_index, int part_index, int source, double* latent_rows, int local_num_rows)
 {
-	VLOG(2) << mpi_rank << "-" << thread_index << " t clear: " << source;
+	VLOG(2) << "W" << mpi_rank << "-" << thread_index << " t clear: " << source;
 	if(option->cp_type_ == "sync"){
 		// nothing
 	} else if(option->cp_type_ == "async"){
@@ -297,6 +297,7 @@ void NomadBody::cp_sht_clear(int thread_index, int part_index, int source, doubl
 		if(cp_need_archive_msg_counter[thread_index] == mpi_size){
 			cp_fmsgs[thread_index]->close();
 			cp_fmsgs[thread_index]->clear();
+			VLOG(2) << "W" << mpi_rank << "-" << thread_index << ": archive message finishes";
 			delete cp_fmsgs[thread_index];
 			if(thread_index == 0){
 				_send_lfinish_signal();
@@ -324,7 +325,7 @@ void NomadBody::cp_sht_resume(int thread_index, int part_index, int epoch)
 
 void NomadBody::cp_update_func_action(int thread_index, int part_index, double* latent_rows, int local_num_rows)
 {
-	VLOG(1) << mpi_rank << "-" << thread_index << " cp_uf ";
+	VLOG(1) << "W" << mpi_rank << "-" << thread_index << " cp_uf ";
 	if(option->cp_type_ == "sync"){
 		// triggered by the last clear signal
 		_sync_all_update_thread();
