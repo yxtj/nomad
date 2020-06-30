@@ -24,7 +24,7 @@ void NomadBody::_send_clear_signal(bool send2self, bool direct_send)
 	} else{
 		ColumnData* p_col = column_pool->pop();
 		p_col->col_index_ = ColumnData::SIGNAL_CP_CLEAR; //set message type
-		p_col->pos_ = mpi_rank; // set source
+		p_col->pos_ = cp_epoch; // set epoch
 		send_queue.push(p_col);
 	}
 }

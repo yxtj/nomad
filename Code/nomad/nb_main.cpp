@@ -269,7 +269,7 @@ int NomadBody::run(NomadOption* opt){
 			buf << "current test RMSE: " << std::fixed << std::setprecision(10)
 				<< sqrt(global_test_sum_error / global_test_count_error) << "\n";
 			/*
-			LOG(INFO) << (boost::format("detail: train: s=%.4lf, c=%d; test: s=%.4lf, c=%d; u=%ll, f=%ll, s=%.4lf")
+			LOG(INFO) << (boost::format("detail: train: s=%.4lf, c=%d; test: s=%.4lf, c=%d; u=%ld, f=%ld, s=%.4lf")
 				% global_train_sum_error % global_train_sum_error % global_test_sum_error % global_test_count_error
 				% global_num_updates % global_num_failures % global_send_count).str();
 			*/

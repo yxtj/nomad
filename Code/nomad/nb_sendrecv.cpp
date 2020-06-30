@@ -181,9 +181,7 @@ void NomadBody::train_send_func(const double timeout){
 					cur_num = 0;
 				}
 				//send clear signal
-				for(int target_rank = 0; target_rank < mpi_size; ++target_rank){
-					_bcast_cp_clear(target_rank);
-				}
+				_bcast_cp_clear(p_col->pos_);
 				column_pool->push(p_col);
 				continue;
 			}
