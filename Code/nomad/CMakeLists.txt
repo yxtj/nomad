@@ -37,8 +37,9 @@ if (${CMAKE_CXX_COMPILER_ID} STREQUAL MSVC)
 else ()
 	message(STATUS "Complier: ${CMAKE_CXX_COMPILER_ID}")
 	#set(CMAKE_CXX_FLAGS_DEBUG "-Wall -fsigned-char -D TBB_USE_THREADING_TOOLS")
-	set(CMAKE_CXX_FLAGS_DEBUG "-Wall -fsigned-char -DTBB_USE_DEBUG=0 -DTBB_IMPLEMENT_CPP0X=1")
-	set(CMAKE_CXX_FLAGS_RELEASE "-Wall -fsigned-char")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -fsigned-char -DTBB_USE_DEBUG=0 -DTBB_IMPLEMENT_CPP0X=1")
+	#set(CMAKE_CXX_FLAGS_DEBUG "-Wall -fsigned-char -DTBB_USE_DEBUG=0 -DTBB_IMPLEMENT_CPP0X=1")
+	#set(CMAKE_CXX_FLAGS_RELEASE "-Wall -fsigned-char")
 endif ()
 
 # Locate Boost
