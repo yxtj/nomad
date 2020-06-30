@@ -141,7 +141,9 @@ private:
 	int cp_epoch;
 
 	vector<long long, callocator<long long> > msg_archived;
-	vector<double, callocator<double> > cp_write_time;
+	vector<double, callocator<double> > cp_time_write;
+	double cp_time_total;
+	tbb::tick_count cp_time_total_timer;
 	vector<std::ofstream*> cp_fmsgs;
 
 	// master - checkpoint
@@ -245,7 +247,6 @@ private:
 	void _archive_msg_queue(int thread_index, const string& suffix, colque& queue, bool locked = true);
 	void arhive_job_queue(int thread_index, bool locked = true);
 	void arhive_send_queue(bool locked = true);
-	void archive_msg_queue_all(bool locked = true);
 	void archive_msg(int thread_index, ColumnData* p_col);
 	//void finish_cp(int thread_index);
 

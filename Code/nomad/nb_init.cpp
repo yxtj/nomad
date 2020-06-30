@@ -166,7 +166,8 @@ void NomadBody::initial_cp(){
 	cp_fmsgs.resize(option->num_threads_);
 	//cp_state.resize(option->num_threads_, CheckpointState(num_parts));
 	msg_archived.resize(option->num_threads_, 0);
-	cp_write_time.resize(option->num_threads_, 0.0);
+	cp_time_write.resize(option->num_threads_, 0.0);
+	cp_time_total = 0;
 	cp_action_ready = callocator<atomic<bool>>().allocate(option->num_threads_);
 	for(int i = 0; i < option->num_threads_; ++i)
 		cp_action_ready[i] = false;

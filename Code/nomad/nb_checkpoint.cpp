@@ -42,7 +42,7 @@ string NomadBody::gen_cp_file_name(int part_index)
 }
 
 /////////////////////////////////////////////////////////
-// Define Checkpoint Core Functions
+// Define Checkpoint IO Functions
 /////////////////////////////////////////////////////////
 void NomadBody::archive_local(int thread_index, double* latent_rows, int local_num_rows)
 {
@@ -55,7 +55,7 @@ void NomadBody::archive_local(int thread_index, double* latent_rows, int local_n
 	fout.write(reinterpret_cast<char*>(&dim), sizeof(dim));
 	fout.write(reinterpret_cast<char*>(latent_rows), sizeof(double) * local_num_rows * dim);
 	fout.close();
-	cp_write_time[thread_index] += (tbb::tick_count::now() - t0).seconds();
+	cp_time_write[thread_index] += (tbb::tick_count::now() - t0).seconds();
 }
 
 void NomadBody::_archive_msg_queue(int thread_index, const string& suffix, colque& queue, bool locked)
@@ -84,7 +84,7 @@ void NomadBody::_archive_msg_queue(int thread_index, const string& suffix, colqu
 			queue.push(p_col);
 		}
 	}
-	cp_write_time[thread_index] += (tbb::tick_count::now() - t0).seconds();
+	cp_time_write[thread_index] += (tbb::tick_count::now() - t0).seconds();
 }
 
 void NomadBody::arhive_job_queue(int thread_index, bool locked)
@@ -99,25 +99,12 @@ void NomadBody::arhive_send_queue(bool locked)
 	_archive_msg_queue(0, ".smsg", send_queue, locked);
 }
 
-void NomadBody::archive_msg_queue_all(bool locked)
-{
-	tbb::tick_count t0 = tbb::tick_count::now();
-	// each job queue
-	for(int thread_index = 0; thread_index < option->num_threads_; ++thread_index){
-		arhive_job_queue(thread_index);
-	}
-	// send queue
-	arhive_send_queue();
-	cp_write_time[0] += (tbb::tick_count::now() - t0).seconds();
-
-}
-
 void NomadBody::archive_msg(int thread_index, ColumnData* p_col){
 	char* buffer = new char[unit_bytenum];
 	tbb::tick_count t0 = tbb::tick_count::now();
 	p_col->serialize(buffer, option->latent_dimension_);
 	cp_fmsgs[thread_index]->write(buffer, unit_bytenum);
-	cp_write_time[thread_index] += (tbb::tick_count::now() - t0).seconds();
+	cp_time_write[thread_index] += (tbb::tick_count::now() - t0).seconds();
 	//++msg_archived[thread_index];
 	delete[] buffer;
 }
@@ -154,6 +141,9 @@ void NomadBody::restore(int epoch, int thread_index, double* latent_rows, int& l
 	restore_msg_queue(cp_f + ".smsg", send_queue);
 }
 
+/////////////////////////////////////////////////////////
+// Define Checkpoint Util Functions
+/////////////////////////////////////////////////////////
 
 void NomadBody::_send_sig2threads_start(int epoch)
 {
@@ -197,19 +187,22 @@ void NomadBody::_sync_all_update_thread()
 	}
 }
 
+/////////////////////////////////////////////////////////
+// Define Checkpoint Method Specific Functions
+/////////////////////////////////////////////////////////
+
 // machine level
 
 void NomadBody::cp_shm_start(int epoch)
 {
 	VLOG(1) << mpi_rank << " m start";
+	cp_time_total_timer = tbb::tick_count::now();
 	cp_epoch = epoch;
 	checkpointing = true;
 	if(option->cp_type_ == "sync"){
 		allow_sending = false;
 		allow_processing = false;
-		for(int i = 0; i < option->num_threads_; ++i){
-			cp_action_ready[i] = true;
-		}
+		_send_clear_signal(true, true);
 	}else if(option->cp_type_ == "async"){
 		_send_sig2threads_start(epoch);
 		_send_clear_signal(true, false);
@@ -225,13 +218,17 @@ void NomadBody::cp_shm_clear(int source)
 {
 	VLOG(1) << mpi_rank << " m clear " << source;
 	if(option->cp_type_ == "sync"){
-		// nothing
+		++cp_received_clear_counter;
+		if(cp_received_clear_counter == mpi_size){
+			for(int i = 0; i < option->num_threads_; ++i)
+				cp_action_ready[i] = true;
+		}
 	} else if(option->cp_type_ == "async"){
 		_send_sig2threads_clear(source);
 	} else if(option->cp_type_ == "vs"){
 		++cp_received_clear_counter;
 		if(cp_received_clear_counter == mpi_size){
-			// temporarily stop processing to sablize the send_queue
+			// temporarily stop processing to stablize the send_queue
 			allow_processing = false;
 			for(int i = 0; i < option->num_threads_; ++i)
 				cp_action_ready[i] = true;
@@ -248,7 +245,6 @@ void NomadBody::cp_shm_resume(int epoch)
 		LOG(FATAL) << "epoch of checkpoint does not match: " << cp_epoch << " vs " << epoch;
 	}
 	if(option->cp_type_ == "sync"){
-		archive_msg_queue_all();
 		allow_processing = true;
 		allow_sending = true;
 	} else if(option->cp_type_ == "async"){
@@ -259,12 +255,13 @@ void NomadBody::cp_shm_resume(int epoch)
 		}
 	} else if(option->cp_type_ == "vs"){
 		allow_sending = true;
-		cp_received_clear_counter = 0;
 	} else{
 
 	}
-	checkpointing = false;
+	cp_received_clear_counter = 0;
 	cp_ut_wait_counter = 0;
+	checkpointing = false;
+	cp_time_total += (tbb::tick_count::now() - cp_time_total_timer).seconds();
 }
 
 // thread level
@@ -326,11 +323,12 @@ void NomadBody::cp_update_func_action(int thread_index, int part_index, double* 
 {
 	VLOG(1) << mpi_rank << "-" << thread_index << " cp_uf ";
 	if(option->cp_type_ == "sync"){
-		// triggered by start signal
+		// triggered by the last clear signal
 		_sync_all_update_thread();
 		archive_local(thread_index, latent_rows, local_num_rows);
-		// message queues are not stable now
+		arhive_job_queue(thread_index);
 		if(thread_index == 0){
+			arhive_send_queue();
 			_send_lfinish_signal();
 		}
 	} else if(option->cp_type_ == "async"){
