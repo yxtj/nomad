@@ -102,10 +102,11 @@ int NomadBody::run(NomadOption* opt){
 		}
 	}
 
-	tbb::tick_count start_time = tbb::tick_count::now();
+	double train_time = 0.0;
 	double test_time = 0.0;
 	// main working loop
 	for(unsigned int main_timeout_iter = 0; !finished && main_timeout_iter < option->timeouts_.size(); main_timeout_iter++){
+		tbb::tick_count start_time = tbb::tick_count::now();
 
 		const double timeout = (main_timeout_iter == 0) ? option->timeouts_[0] :
 			option->timeouts_[main_timeout_iter] - option->timeouts_[main_timeout_iter - 1];
@@ -132,7 +133,7 @@ int NomadBody::run(NomadOption* opt){
 		count_setup_threads = 0;
 
 		/////////////////////////////////////////////////////////
-		// Prepare for Training
+		// Prepare for Testing
 		/////////////////////////////////////////////////////////
 		tbb::tick_count test_start_time = tbb::tick_count::now();
 		{
@@ -204,6 +205,8 @@ int NomadBody::run(NomadOption* opt){
 			std::this_thread::sleep_for(chrono::duration<double>(SLEEP_TIME));
 		}
 
+		tbb::tick_count finish_time = tbb::tick_count::now();
+
 		/////////////////////////////////////////////////////////
 		// Compute Statistics
 		/////////////////////////////////////////////////////////
@@ -256,14 +259,13 @@ int NomadBody::run(NomadOption* opt){
 		MPI_Barrier(MPI_COMM_WORLD);
 
 		if(mpi_rank == 0){
-			tbb::tick_count now = tbb::tick_count::now();
-			test_time = (now - test_start_time).seconds();
-			double elapsed = (now - start_time).seconds() - test_time;
+			test_time += (finish_time - test_start_time).seconds();
+			train_time += (test_start_time - start_time).seconds();
 			ostringstream buf;
 			buf << "Statistics:\n"
 				<< "=====================================================\n";
-			buf << "elapsed time: " << (finished ? elapsed : option->timeouts_[main_timeout_iter])
-				<< " total training time: " << elapsed << "\n";
+			buf << "elapsed time: " << (finished ? train_time : option->timeouts_[main_timeout_iter])
+				<< " total training time: " << train_time << " total testing time: " << test_time;
 			buf << "current training RMSE: " << std::fixed << std::setprecision(10)
 				<< sqrt(global_train_sum_error / global_train_count_error) << "\n";
 			buf << "current test RMSE: " << std::fixed << std::setprecision(10)
