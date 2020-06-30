@@ -261,7 +261,7 @@ void NomadBody::cp_shm_resume(int epoch)
 	cp_received_clear_counter = 0;
 	cp_ut_wait_counter = 0;
 	checkpointing = false;
-	cp_time_total += (tbb::tick_count::now() - cp_time_total_timer).seconds();
+	cp_time_total_worker += (tbb::tick_count::now() - cp_time_total_timer).seconds();
 }
 
 // thread level

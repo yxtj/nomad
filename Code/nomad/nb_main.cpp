@@ -249,7 +249,7 @@ int NomadBody::run(NomadOption* opt){
 		double global_cp_time_total = 0.0;
 		if(option->cp_type_ != "none"){
 			MPI_Allreduce(&machine_cp_time_write, &global_cp_time_write, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-			MPI_Allreduce(&cp_time_total, &global_cp_time_total, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+			MPI_Allreduce(&cp_time_total_worker, &global_cp_time_total, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 		}
 
 		MPI_Barrier(MPI_COMM_WORLD);
@@ -276,7 +276,8 @@ int NomadBody::run(NomadOption* opt){
 				<< "; u=" << global_num_updates << ", f=" << global_num_failures << ", s=" << global_send_count;
 
 			if(option->cp_type_ != "none"){
-				LOG(INFO) << "Number of checkpoints: " << cp_master_epoch << " Total time: " << global_cp_time_total
+				LOG(INFO) << "Number of checkpoints: " << cp_master_epoch
+					<< " Total time by master: " << cp_time_total_master << " by worker: " << global_cp_time_total
 					<< " each one: " << global_cp_time_total / cp_master_epoch;
 				LOG(INFO) << "Total checkpoint writing time: " << global_cp_time_write
 					<< " each one: " << global_cp_time_write / cp_master_epoch

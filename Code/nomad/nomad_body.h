@@ -142,8 +142,9 @@ private:
 
 	vector<long long, callocator<long long> > msg_archived;
 	vector<double, callocator<double> > cp_time_write;
-	double cp_time_total;
+	double cp_time_total_worker;
 	tbb::tick_count cp_time_total_timer;
+	double cp_time_total_master;
 	vector<std::ofstream*> cp_fmsgs;
 
 	// master - checkpoint

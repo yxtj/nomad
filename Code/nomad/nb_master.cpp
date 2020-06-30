@@ -88,8 +88,10 @@ void NomadBody::master_checkpoint(){
 			// finish
 			cp_master_lfinish_count = 0;
 			last_cptime = tbb::tick_count::now();
+			double duration = (last_cptime - cp_start_time).seconds();
+			cp_time_total_master += duration;
 			LOG(INFO) << "M: finish checkpoint " << cp_master_epoch << " at " << (last_cptime - start_time).seconds()
-				<< " duration: " << (last_cptime - cp_start_time).seconds();
+				<< " duration: " << duration;
 			cp_master_epoch++;
 		}
 	}
