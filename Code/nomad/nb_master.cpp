@@ -33,10 +33,10 @@ void NomadBody::master_termcheck()
 		diff = abs(rmse - global_error);
 		double time = (tbb::tick_count::now() - start_time).seconds();
 		LOG(INFO) << boost::format("M: termination check at %.2lf: last RMSE: %g new RMSE: %g difference: %g")
-			% time % global_error % rmse % diff << endl;
+			% time % global_error % rmse % diff;
 		global_error = rmse;
 	}
-	LOG(INFO) << "M: send terimination signal" << endl;
+	LOG(INFO) << "M: send terimination signal";
 	send_queue_force.emplace(ColumnData::SIGNAL_TERMINATE, tm_count);
 }
 
@@ -52,7 +52,7 @@ void NomadBody::sh_m_lerror(int source, double error, long long count)
 	if(all_of(tm_local_error_ready, tm_local_error_ready + mpi_size,
 		[](const atomic<bool>& b){ return b.load(); }))
 	{
-		DVLOG(1) << "M: tm notify" << endl;
+		DVLOG(1) << "M: tm notify";
 		tm_cv.notify_all();
 	}
 }
@@ -66,6 +66,7 @@ void NomadBody::master_checkpoint(){
 	LOG(INFO) << "M: start checkpoint thread" << endl;
 	tbb::tick_count last_cptime = start_time;
 	std::chrono::duration<double> cp_interval(option->cp_interval_);
+	tbb::tick_count cp_start_time;
 	while(!finished){
 		std::unique_lock<std::mutex> lk(cp_m);
 		// use cp_cv.wait_for to implement an interruptable sleep_for
@@ -75,7 +76,8 @@ void NomadBody::master_checkpoint(){
 		if(!finished && flag_train_ready && !flag_train_stop){
 			if(!btm)
 				continue;
-			LOG(INFO) << "M: start checkpoint " << cp_master_epoch << " at " << (tbb::tick_count::now() - start_time).seconds() << endl;
+			cp_start_time = tbb::tick_count::now();
+			LOG(INFO) << "M: start checkpoint " << cp_master_epoch << " at " << (cp_start_time - start_time).seconds();
 			send_queue_force.emplace(ColumnData::SIGNAL_CP_START, cp_master_epoch);
 			// wait for local finish
 			while(cp_master_lfinish_count < mpi_size){
@@ -85,12 +87,13 @@ void NomadBody::master_checkpoint(){
 			send_queue_force.emplace(ColumnData::SIGNAL_CP_RESUME, cp_master_epoch);
 			// finish
 			cp_master_lfinish_count = 0;
-			cp_master_epoch++;
 			last_cptime = tbb::tick_count::now();
-			LOG(INFO) << "M: finish checkpoint " << cp_master_epoch << " at " << (last_cptime - start_time).seconds() << endl;
+			LOG(INFO) << "M: finish checkpoint " << cp_master_epoch << " at " << (last_cptime - start_time).seconds()
+				<< " duration: " << (last_cptime - cp_start_time).seconds();
+			cp_master_epoch++;
 		}
 	}
-	LOG(INFO) << "M: finish checkpoint thread" << endl;
+	LOG(INFO) << "M: finish checkpoint thread";
 }
 
 void NomadBody::cp_sh_m_lfinish(int source)

@@ -265,17 +265,22 @@ int NomadBody::run(NomadOption* opt){
 				<< sqrt(global_train_sum_error / global_train_count_error);
 			LOG(INFO) << "current test RMSE: " << std::fixed << std::setprecision(10)
 				<< sqrt(global_test_sum_error / global_test_count_error);
-
+			/*
+			LOG(INFO) << (boost::format("detail: train: s=%.4lf, c=%d; test: s=%.4lf, c=%d; u=%ll, f=%ll, s=%.4lf")
+				% global_train_sum_error % global_train_sum_error % global_test_sum_error % global_test_count_error
+				% global_num_updates % global_num_failures % global_send_count).str();
+			*/
 			LOG(INFO) << std::fixed << std::setprecision(4) << "detail: "
 				<< "train: s=" << global_train_sum_error << ", c=" << global_train_count_error
 				<< "; test: s=" << global_test_sum_error << ", c=" << global_test_count_error
 				<< "; u=" << global_num_updates << ", f=" << global_num_failures << ", s=" << global_send_count;
+
 			if(option->cp_type_ != "none"){
 				LOG(INFO) << "Number of checkpoints: " << cp_master_epoch << " Total time: " << global_cp_time_total
-					<< " . Each one: " << global_cp_time_total / cp_master_epoch;
+					<< " each one: " << global_cp_time_total / cp_master_epoch;
 				LOG(INFO) << "Total checkpoint writing time: " << global_cp_time_write
-					<< " . Each one: " << global_cp_time_write / cp_master_epoch
-					<< ", average on worker: " << global_cp_time_write / cp_master_epoch / mpi_size;
+					<< " each one: " << global_cp_time_write / cp_master_epoch
+					<< " average on worker: " << global_cp_time_write / cp_master_epoch / mpi_size;
 			}
 			LOG(INFO) << "=====================================================";
 		}
