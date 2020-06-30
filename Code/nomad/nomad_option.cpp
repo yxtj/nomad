@@ -68,7 +68,7 @@ bool NomadOption::parse_command(int& argc, char**& argv) {
 		("net_ratio", value<std::string>(&net_ratio_str)->default_value("inf"),
 			"the maximum sending ratio in network control (MB/s)")
 
-		("verbose,v", value<int>(&verbose_level)->default_value(-1),
+		("verbose,v", value<int>(&verbose_level)->default_value(0),
 			"the verbose level for logging")
 	;
 

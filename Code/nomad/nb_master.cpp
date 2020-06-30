@@ -42,7 +42,7 @@ void NomadBody::master_termcheck()
 
 void NomadBody::sh_m_lerror(int source, double error, long long count)
 {
-	LOG(INFO) << "M: tm receive from " << source << ": " << error << " - " << count << endl;
+	VLOG(1) << "M: tm receive from " << source << ": " << error << " - " << count << endl;
 	{
 		std::unique_lock<std::mutex> lk(tm_m);
 		tm_local_error_received[source] = error;
@@ -52,7 +52,7 @@ void NomadBody::sh_m_lerror(int source, double error, long long count)
 	if(all_of(tm_local_error_ready, tm_local_error_ready + mpi_size,
 		[](const atomic<bool>& b){ return b.load(); }))
 	{
-		LOG(INFO) << "M: tm notify" << endl;
+		VLOG(1) << "M: tm notify" << endl;
 		tm_cv.notify_all();
 	}
 }
@@ -90,6 +90,7 @@ void NomadBody::master_checkpoint(){
 			LOG(INFO) << "M: finish checkpoint " << cp_master_epoch << " at " << (last_cptime - start_time).seconds() << endl;
 		}
 	}
+	LOG(INFO) << "M: finish checkpoint thread" << endl;
 }
 
 void NomadBody::cp_sh_m_lfinish(int source)

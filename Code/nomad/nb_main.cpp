@@ -97,7 +97,7 @@ int NomadBody::run(NomadOption* opt){
 
 	if(mpi_rank == 0){
 		for(double ttt : option->timeouts_){
-			LOG(INFO) << log_header << "timeout: " << ttt << endl;
+			LOG(INFO) << log_header << "timeout: " << ttt;
 		}
 	}
 
@@ -162,7 +162,7 @@ int NomadBody::run(NomadOption* opt){
 				MPI_Allreduce(&num_columns_prepared, &global_num_columns_prepared, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
 				if(mpi_rank == 0){
-					LOG(INFO) << log_header << "num columns prepared: " << global_num_columns_prepared << " / " << global_num_cols << endl;
+					LOG(INFO) << log_header << "num columns prepared: " << global_num_columns_prepared << " / " << global_num_cols;
 					std::this_thread::sleep_for(std::chrono::duration<double>(0.2));
 				}
 
@@ -190,14 +190,14 @@ int NomadBody::run(NomadOption* opt){
 
 		// receive columns for testing
 		test_recv_func();
-		LOG(INFO) << log_header << "test receive done" << endl;
+		LOG(INFO) << log_header << "test receive done";
 
 		test_send_thread.join();
 
 		// test done
 		flag_test_stop = true;
 
-		LOG(INFO) << log_header << "waiting to join with updaters" << endl;
+		LOG(INFO) << log_header << "waiting to join with updaters";
 
 		while(count_setup_threads < option->num_threads_){
 			std::this_thread::sleep_for(chrono::duration<double>(SLEEP_TIME));
@@ -218,7 +218,7 @@ int NomadBody::run(NomadOption* opt){
 		}
 
 		LOG(INFO) << log_header << "machine_num_updates: " << machine_num_updates
-			<< ", machine_num_failures: " << machine_num_failures << endl;
+			<< ", machine_num_failures: " << machine_num_failures;
 
 		int machine_train_count_error = std::accumulate(train_count_errors, train_count_errors + option->num_threads_, 0);
 		int machine_test_count_error = std::accumulate(test_count_errors, test_count_errors + option->num_threads_, 0);
@@ -256,13 +256,13 @@ int NomadBody::run(NomadOption* opt){
 			tbb::tick_count now = tbb::tick_count::now();
 			test_time = (now - test_start_time).seconds();
 			double elapsed = (now - start_time).seconds() - test_time;
-			LOG(INFO) << "=====================================================" << endl;
+			LOG(INFO) << "=====================================================";
 			LOG(INFO) << "elapsed time: " << (finished ? elapsed : option->timeouts_[main_timeout_iter]) 
-				<< " total training time: " << elapsed << endl;
+				<< " total training time: " << elapsed;
 			LOG(INFO) << "current training RMSE: " << std::fixed << std::setprecision(10)
-				<< sqrt(global_train_sum_error / global_train_count_error) << endl;
+				<< sqrt(global_train_sum_error / global_train_count_error);
 			LOG(INFO) << "current test RMSE: " << std::fixed << std::setprecision(10)
-				<< sqrt(global_test_sum_error / global_test_count_error) << endl;
+				<< sqrt(global_test_sum_error / global_test_count_error);
 
 			LOG(INFO) << std::fixed << std::setprecision(4) << "detail: "
 				<< "train: s=" << global_train_sum_error << ", c=" << global_train_count_error
@@ -271,9 +271,9 @@ int NomadBody::run(NomadOption* opt){
 				<< endl;
 			if(option->cp_type_ != "none"){
 				LOG(INFO) << "Total write time for " << cp_master_epoch << " checkpoints " << global_cp_write_time
-					<< " . Each one is " << global_cp_write_time / cp_master_epoch << endl;
+					<< " . Each one is " << global_cp_write_time / cp_master_epoch;
 			}
-			LOG(INFO) << "=====================================================" << endl;
+			LOG(INFO) << "=====================================================";
 		}
 		if(option->flag_pause_){
 			std::this_thread::sleep_for(std::chrono::duration<double>(3.0));
@@ -306,18 +306,18 @@ int NomadBody::run(NomadOption* opt){
 	finished = true;
 	cp_cv.notify_all();
 	if(master_cp_thread && master_cp_thread->joinable()){
-		LOG(INFO) << log_header << "Waiting for master - checkpoint thread to join" << endl;
+		LOG(INFO) << log_header << "Waiting for master - checkpoint thread to join";
 		master_cp_thread->join();
 		delete master_cp_thread;
 	}
 	tm_cv.notify_all();
 	if(master_tm_thread && master_tm_thread->joinable()){
-		LOG(INFO) << log_header << "Waiting for master - termindation check thread to join" << endl;
+		LOG(INFO) << log_header << "Waiting for master - termindation check thread to join";
 		master_tm_thread->join();
 		delete master_tm_thread;
 	}
 
-	LOG(INFO) << log_header << "Waiting for updater threads to join" << endl;
+	LOG(INFO) << log_header << "Waiting for updater threads to join";
 	for(int i = 0; i < option->num_threads_; i++){
 		updater_threads[i].join();
 	}
@@ -342,7 +342,7 @@ int NomadBody::run(NomadOption* opt){
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	LOG(INFO) << log_header << "All done, now free memory" << endl;
+	LOG(INFO) << log_header << "All done, now free memory";
 
 	callocator<colque>().deallocate(job_queues, option->num_threads_);
 
@@ -391,7 +391,7 @@ int NomadBody::run(NomadOption* opt){
 void NomadBody::updater_func(int thread_index){
 	int part_index = mpi_rank * option->num_threads_ + thread_index;
 	string log_header = (boost::format("W%d-%d: ") % mpi_rank % thread_index).str();
-	LOG(INFO) << log_header << boost::format("rank: %d, thread_index: %d, part_index: %d") % mpi_rank % thread_index % part_index << endl;
+	LOG(INFO) << log_header << boost::format("rank: %d, thread_index: %d, part_index: %d") % mpi_rank % thread_index % part_index;
 
 	/////////////////////////////////////////////////////////
 	// Read Data
@@ -437,7 +437,7 @@ void NomadBody::updater_func(int thread_index){
 	count_setup_threads++;
 
 	for(unsigned int timeout_iter = 0; !finished && timeout_iter < option->timeouts_.size(); timeout_iter++){
-		LOG(INFO) << log_header << "thread: " << thread_index << " ready to train!" << endl;
+		LOG(INFO) << log_header << "thread: " << thread_index << " ready to train!";
 		// wait until all threads are ready
 		while(!finished && flag_train_ready == false){
 			std::this_thread::sleep_for(chrono::duration<double>(SLEEP_TIME));
@@ -575,7 +575,7 @@ void NomadBody::updater_func(int thread_index){
 			//double elapsed_seconds = (tbb::tick_count::now() - start_time).seconds();
 			//if(monitor_num < elapsed_seconds){
 			//	LOG(INFO) << log_header << "test updater alive," << mpi_rank << ","<< monitor_num << ","
-			//			<< num_col_processed << "/" << global_num_cols << "" << endl;
+			//			<< num_col_processed << "/" << global_num_cols << "";
 			//	monitor_num++;
 			//}
 
@@ -668,7 +668,7 @@ void NomadBody::updater_func(int thread_index){
 			for(int t = 0; t < dim; t++){
 				ofs << "," << row[t];
 			}
-			ofs << endl;
+			ofs;
 		}
 		ofs.close();
 
