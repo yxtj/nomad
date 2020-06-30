@@ -281,7 +281,7 @@ int NomadBody::run(NomadOption* opt){
 			if(option->cp_type_ != "none"){
 				buf << "Number of checkpoints: " << cp_master_epoch
 					<< " Total time by master: " << cp_time_total_master << " by worker: " << global_cp_time_total
-					<< " each one: " << global_cp_time_total / cp_master_epoch;
+					<< " each one: " << cp_time_total_master / cp_master_epoch;
 				buf << "Total checkpoint writing time: " << global_cp_time_write
 					<< " each one: " << global_cp_time_write / cp_master_epoch
 					<< " average on worker: " << global_cp_time_write / cp_master_epoch / mpi_size;
