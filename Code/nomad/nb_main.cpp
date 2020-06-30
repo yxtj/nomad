@@ -271,12 +271,11 @@ int NomadBody::run(NomadOption* opt){
 				<< "; test: s=" << global_test_sum_error << ", c=" << global_test_count_error
 				<< "; u=" << global_num_updates << ", f=" << global_num_failures << ", s=" << global_send_count;
 			if(option->cp_type_ != "none"){
-				LOG(INFO) << "Total write time for " << cp_master_epoch << " checkpoints: " << global_cp_time_write
-					<< " . Each one: " << global_cp_time_write / cp_master_epoch
-					<< ", average on worker: " << global_cp_time_write / cp_master_epoch / mpi_size
-					<< "\n"
-					<< "Total time for checkpointing: " << global_cp_time_total
+				LOG(INFO) << "Number of checkpoints: " << cp_master_epoch << " Total time: " << global_cp_time_total
 					<< " . Each one: " << global_cp_time_total / cp_master_epoch;
+				LOG(INFO) << "Total checkpoint writing time: " << global_cp_time_write
+					<< " . Each one: " << global_cp_time_write / cp_master_epoch
+					<< ", average on worker: " << global_cp_time_write / cp_master_epoch / mpi_size;
 			}
 			LOG(INFO) << "=====================================================";
 		}
