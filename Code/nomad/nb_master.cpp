@@ -52,7 +52,7 @@ void NomadBody::sh_m_lerror(int source, double error, long long count)
 	if(all_of(tm_local_error_ready, tm_local_error_ready + mpi_size,
 		[](const atomic<bool>& b){ return b.load(); }))
 	{
-		VLOG(1) << "M: tm notify" << endl;
+		DVLOG(1) << "M: tm notify" << endl;
 		tm_cv.notify_all();
 	}
 }

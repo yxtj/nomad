@@ -133,7 +133,7 @@ void NomadBody::train_send_func(const double timeout){
 		}
 
 		if(send_queue_force.try_pop(force_sent_signal)){
-			LOG(INFO) << log_header << " force " << force_sent_signal.first << " - " << force_sent_signal.second;
+			DLOG(INFO) << log_header << " force " << force_sent_signal.first << " - " << force_sent_signal.second;
 			switch(force_sent_signal.first){
 			case ColumnData::SIGNAL_LERROR:
 				// to master
@@ -257,12 +257,10 @@ void NomadBody::train_recv_func(){
 	while(num_dead < mpi_size){
 		int rc = MPI_Recv(recv_message, msg_bytenum, MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 		//do_net_control_delay();
-		if(rc != MPI_SUCCESS){
-			LOG(FATAL) << "ReceiveTask MPI Error";
-		}
+		LOG_IF(FATAL, rc != MPI_SUCCESS) << "ReceiveTask MPI Error";
 
 		int8_t mtype = *reinterpret_cast<int8_t*>(recv_message);
-		VLOG_IF(2, mtype != MsgType::DATA) << log_header << int(mtype);
+		DLOG_IF(INFO, mtype != MsgType::DATA) << log_header << int(mtype);
 		switch(mtype)
 		{
 		case MsgType::DATA:{

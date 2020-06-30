@@ -267,8 +267,7 @@ int NomadBody::run(NomadOption* opt){
 			LOG(INFO) << std::fixed << std::setprecision(4) << "detail: "
 				<< "train: s=" << global_train_sum_error << ", c=" << global_train_count_error
 				<< "; test: s=" << global_test_sum_error << ", c=" << global_test_count_error
-				<< "; u="<< global_num_updates << ", f=" << global_num_failures << ", s=" << global_send_count
-				<< endl;
+				<< "; u=" << global_num_updates << ", f=" << global_num_failures << ", s=" << global_send_count;
 			if(option->cp_type_ != "none"){
 				LOG(INFO) << "Total write time for " << cp_master_epoch << " checkpoints " << global_cp_write_time
 					<< " . Each one is " << global_cp_write_time / cp_master_epoch;
