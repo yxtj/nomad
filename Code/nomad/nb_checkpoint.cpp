@@ -16,7 +16,7 @@ using namespace std;
 /////////////////////////////////////////////////////////
 // Define Basic Checkpoint functions
 /////////////////////////////////////////////////////////
-void NomadBody::_send_clear_signal(bool send2self, bool direct_send)
+void NomadBody::_send_clear_signal(bool direct_send)
 {
 	if(direct_send){
 		// including itself
@@ -202,21 +202,22 @@ void NomadBody::cp_shm_start(int epoch)
 	if(option->cp_type_ == "sync"){
 		allow_sending = false;
 		allow_processing = false;
-		_send_clear_signal(true, true);
+		_send_clear_signal(true);
 	}else if(option->cp_type_ == "async"){
 		_send_sig2threads_start(epoch);
-		_send_clear_signal(true, false);
+		//_send_clear_signal(false);
 	}else if(option->cp_type_ == "vs"){
 		allow_sending = false;
-		_send_clear_signal(true, true);
+		_send_clear_signal(true);
 	} else{
 
 	}
 }
 
-void NomadBody::cp_shm_clear(int source)
+void NomadBody::cp_shm_clear(int epoch, int source)
 {
 	VLOG(1) << mpi_rank << " m clear " << source;
+	LOG_IF(FATAL, epoch != cp_epoch) << "epoch of checkpoint does not match: " << cp_epoch << " vs " << epoch;
 	if(option->cp_type_ == "sync"){
 		++cp_received_clear_counter;
 		if(cp_received_clear_counter == mpi_size){
@@ -241,9 +242,7 @@ void NomadBody::cp_shm_clear(int source)
 void NomadBody::cp_shm_resume(int epoch)
 {
 	VLOG(1) << mpi_rank << " m resume";
-	if(epoch != cp_epoch){
-		LOG(FATAL) << "epoch of checkpoint does not match: " << cp_epoch << " vs " << epoch;
-	}
+	LOG_IF(FATAL, epoch != cp_epoch) << "epoch of checkpoint does not match: " << cp_epoch << " vs " << epoch;
 	if(option->cp_type_ == "sync"){
 		allow_processing = true;
 		allow_sending = true;
@@ -272,10 +271,14 @@ void NomadBody::cp_sht_start(int thread_index, int part_index, int epoch, double
 	if(option->cp_type_ == "sync"){
 		// nothing
 	} else if(option->cp_type_ == "async"){
+		_sync_all_update_thread();
 		for(int i = 0; i < mpi_size; ++i)
 			cp_need_archive_msg_from[thread_index][i] = true;
 		archive_local(thread_index, latent_rows, local_num_rows);
 		cp_fmsgs[thread_index] = new ofstream(gen_cp_file_name(part_index) + ".msg", ofstream::binary);
+		if(thread_index == 0){
+			_send_clear_signal(false);
+		}
 	} else if(option->cp_type_ == "vs"){
 		// nothing
 	} else{

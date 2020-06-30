@@ -239,7 +239,7 @@ private:
 	/////////////////////////////////////////////////////////
 	// Define Checkpoint functions
 	/////////////////////////////////////////////////////////
-	void _send_clear_signal(bool send2self, bool direct_send);
+	void _send_clear_signal(bool direct_send);
 	void _send_lfinish_signal();
 	string gen_cp_file_name(int part_index);
 
@@ -262,7 +262,7 @@ private:
 
 	// signal handler - machine (MPI instance) level
 	void cp_shm_start(int epoch);
-	void cp_shm_clear(int source); // source rank
+	void cp_shm_clear(int epoch, int source); // source rank
 	void cp_shm_resume(int epoch);
 
 	// signal handler - thread level

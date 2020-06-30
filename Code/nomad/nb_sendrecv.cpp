@@ -304,8 +304,9 @@ void NomadBody::train_recv_func(){
 			break;
 		}
 		case MsgType::CP_CLEAR:{
-			int source = *reinterpret_cast<int*>(recv_message + 1);
-			cp_shm_clear(source);
+			int epoch = *reinterpret_cast<int*>(recv_message + 1);
+			int source = status.MPI_SOURCE;
+			cp_shm_clear(epoch, source);
 			break;
 		}
 		case MsgType::CP_LFINISH:{
