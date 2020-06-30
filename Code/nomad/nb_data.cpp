@@ -28,6 +28,10 @@ static bool read_data(const string filename, int part_index, int num_parts,
 {
 
 	ifstream data_file(filename, ios::in | ios::binary);
+	if(!data_file){
+		LOG(ERROR) << "Cannot open file: " << filename << endl;
+		return false;
+	}
 
 	int file_id;
 
