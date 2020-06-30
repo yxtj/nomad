@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <iomanip>
+#include <sstream>
 #include <string>
 #include <fstream>
 #include <vector>
@@ -258,32 +259,35 @@ int NomadBody::run(NomadOption* opt){
 			tbb::tick_count now = tbb::tick_count::now();
 			test_time = (now - test_start_time).seconds();
 			double elapsed = (now - start_time).seconds() - test_time;
-			LOG(INFO) << "=====================================================";
-			LOG(INFO) << "elapsed time: " << (finished ? elapsed : option->timeouts_[main_timeout_iter]) 
+			ostringstream buf;
+			buf << "Statistics:\n"
+				<< "=====================================================";
+			buf << "elapsed time: " << (finished ? elapsed : option->timeouts_[main_timeout_iter])
 				<< " total training time: " << elapsed;
-			LOG(INFO) << "current training RMSE: " << std::fixed << std::setprecision(10)
+			buf << "current training RMSE: " << std::fixed << std::setprecision(10)
 				<< sqrt(global_train_sum_error / global_train_count_error);
-			LOG(INFO) << "current test RMSE: " << std::fixed << std::setprecision(10)
+			buf << "current test RMSE: " << std::fixed << std::setprecision(10)
 				<< sqrt(global_test_sum_error / global_test_count_error);
 			/*
 			LOG(INFO) << (boost::format("detail: train: s=%.4lf, c=%d; test: s=%.4lf, c=%d; u=%ll, f=%ll, s=%.4lf")
 				% global_train_sum_error % global_train_sum_error % global_test_sum_error % global_test_count_error
 				% global_num_updates % global_num_failures % global_send_count).str();
 			*/
-			LOG(INFO) << std::fixed << std::setprecision(4) << "detail: "
+			buf << std::fixed << std::setprecision(4) << "detail: "
 				<< "train: s=" << global_train_sum_error << ", c=" << global_train_count_error
 				<< "; test: s=" << global_test_sum_error << ", c=" << global_test_count_error
 				<< "; u=" << global_num_updates << ", f=" << global_num_failures << ", s=" << global_send_count;
 
 			if(option->cp_type_ != "none"){
-				LOG(INFO) << "Number of checkpoints: " << cp_master_epoch
+				buf << "Number of checkpoints: " << cp_master_epoch
 					<< " Total time by master: " << cp_time_total_master << " by worker: " << global_cp_time_total
 					<< " each one: " << global_cp_time_total / cp_master_epoch;
-				LOG(INFO) << "Total checkpoint writing time: " << global_cp_time_write
+				buf << "Total checkpoint writing time: " << global_cp_time_write
 					<< " each one: " << global_cp_time_write / cp_master_epoch
 					<< " average on worker: " << global_cp_time_write / cp_master_epoch / mpi_size;
 			}
-			LOG(INFO) << "=====================================================";
+			buf << "=====================================================";
+			LOG(INFO) << buf.str();
 		}
 		if(option->flag_pause_){
 			std::this_thread::sleep_for(std::chrono::duration<double>(3.0));
