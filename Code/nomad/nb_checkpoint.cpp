@@ -191,7 +191,7 @@ void NomadBody::_sync_all_update_thread()
 // Define Checkpoint Method Specific Functions
 /////////////////////////////////////////////////////////
 
-// machine level
+// machine level, executed in the receive thread
 
 void NomadBody::cp_shm_start(int epoch)
 {
@@ -205,7 +205,6 @@ void NomadBody::cp_shm_start(int epoch)
 		_send_clear_signal(true);
 	}else if(option->cp_type_ == "async"){
 		_send_sig2threads_start(epoch);
-		//_send_clear_signal(false);
 	}else if(option->cp_type_ == "vs"){
 		allow_sending = false;
 		_send_clear_signal(true);
@@ -262,7 +261,7 @@ void NomadBody::cp_shm_resume(int epoch)
 	cp_time_total_worker += (tbb::tick_count::now() - cp_time_total_timer).seconds();
 }
 
-// thread level
+// thread level, executed in the update thread
 
 void NomadBody::cp_sht_start(int thread_index, int part_index, int epoch, double* latent_rows, int local_num_rows)
 {
@@ -271,10 +270,10 @@ void NomadBody::cp_sht_start(int thread_index, int part_index, int epoch, double
 		// nothing
 	} else if(option->cp_type_ == "async"){
 		_sync_all_update_thread();
-		for(int i = 0; i < mpi_size; ++i)
-			cp_need_archive_msg_from[thread_index][i] = true;
 		archive_local(thread_index, latent_rows, local_num_rows);
 		cp_fmsgs[thread_index] = new ofstream(gen_cp_file_name(part_index) + ".msg", ofstream::binary);
+		for(int i = 0; i < mpi_size; ++i)
+			cp_need_archive_msg_from[thread_index][i] = true;
 		if(thread_index == 0){
 			_send_clear_signal(false);
 		}
@@ -298,7 +297,10 @@ void NomadBody::cp_sht_clear(int thread_index, int part_index, int source, doubl
 			cp_fmsgs[thread_index]->clear();
 			VLOG(2) << "W" << mpi_rank << "-" << thread_index << ": archive message finishes";
 			delete cp_fmsgs[thread_index];
-			if(thread_index == 0){
+			cp_fmsgs[thread_index] = nullptr;
+			if(all_of(cp_need_archive_msg_counter, cp_need_archive_msg_counter+option->num_threads_,
+				[=](atomic<int>& c){ return c == mpi_size; }))
+			{
 				_send_lfinish_signal();
 			}
 		}
