@@ -261,13 +261,13 @@ int NomadBody::run(NomadOption* opt){
 			double elapsed = (now - start_time).seconds() - test_time;
 			ostringstream buf;
 			buf << "Statistics:\n"
-				<< "=====================================================";
+				<< "=====================================================\n";
 			buf << "elapsed time: " << (finished ? elapsed : option->timeouts_[main_timeout_iter])
-				<< " total training time: " << elapsed;
+				<< " total training time: " << elapsed << "\n";
 			buf << "current training RMSE: " << std::fixed << std::setprecision(10)
-				<< sqrt(global_train_sum_error / global_train_count_error);
+				<< sqrt(global_train_sum_error / global_train_count_error) << "\n";
 			buf << "current test RMSE: " << std::fixed << std::setprecision(10)
-				<< sqrt(global_test_sum_error / global_test_count_error);
+				<< sqrt(global_test_sum_error / global_test_count_error) << "\n";
 			/*
 			LOG(INFO) << (boost::format("detail: train: s=%.4lf, c=%d; test: s=%.4lf, c=%d; u=%ll, f=%ll, s=%.4lf")
 				% global_train_sum_error % global_train_sum_error % global_test_sum_error % global_test_count_error
@@ -276,15 +276,16 @@ int NomadBody::run(NomadOption* opt){
 			buf << std::fixed << std::setprecision(4) << "detail: "
 				<< "train: s=" << global_train_sum_error << ", c=" << global_train_count_error
 				<< "; test: s=" << global_test_sum_error << ", c=" << global_test_count_error
-				<< "; u=" << global_num_updates << ", f=" << global_num_failures << ", s=" << global_send_count;
+				<< "; u=" << global_num_updates << ", f=" << global_num_failures << ", s=" << global_send_count
+				<< "\n";
 
 			if(option->cp_type_ != "none"){
 				buf << "Number of checkpoints: " << cp_master_epoch
 					<< " Total time by master: " << cp_time_total_master << " by worker: " << global_cp_time_total
-					<< " each one: " << cp_time_total_master / cp_master_epoch;
+					<< " each one: " << cp_time_total_master / cp_master_epoch << "\n";
 				buf << "Total checkpoint writing time: " << global_cp_time_write
 					<< " each one: " << global_cp_time_write / cp_master_epoch
-					<< " average on worker: " << global_cp_time_write / cp_master_epoch / mpi_size;
+					<< " average on worker: " << global_cp_time_write / cp_master_epoch / mpi_size << "\n";
 			}
 			buf << "=====================================================";
 			LOG(INFO) << buf.str();
