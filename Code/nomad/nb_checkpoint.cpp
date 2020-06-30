@@ -217,7 +217,6 @@ void NomadBody::cp_shm_start(int epoch)
 void NomadBody::cp_shm_clear(int epoch, int source)
 {
 	VLOG(1) << "W" << mpi_rank << " m clear " << source;
-	LOG_IF(FATAL, epoch != cp_epoch) << "epoch of checkpoint does not match: " << cp_epoch << " vs " << epoch;
 	if(option->cp_type_ == "sync"){
 		++cp_received_clear_counter;
 		if(cp_received_clear_counter == mpi_size){
