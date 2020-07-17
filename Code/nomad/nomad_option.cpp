@@ -32,14 +32,14 @@ bool NomadOption::parse_command(int& argc, char**& argv) {
 		("timeout,t",
 			value<vector<double> >(&timeouts_)->multitoken()->default_value(vector<double>(1, 10.0), "10.0"),
 			"timeout seconds until completion")
-		("tm_value,a", value<double>(&stop_rmse)->default_value(1, "1"),
+		("tm_value,u", value<double>(&stop_rmse)->default_value(1, "1"),
 			"the RMSE to stop training")
 		("tm_error,e", value<double>(&min_error)->default_value(1e-6, "1e-6"),
 			"the minimal error to stop")
 		("tm_interval", value<double>(&report_interval)->default_value(1),
 			"interval of reporting local error for termination check")
 		("tm_portion", value<double>(&termcheck_min_portion)->default_value(0.01),
-			"min portion of updated columns to do termination check")
+			"min portion of updated columns between two termination checks")
 		//("ptoken,p", value<int>(&pipeline_token_num_)->default_value(1024),
 		//	"number of tokens in the pipeline")
 		("dim", value<int>(&latent_dimension_)->default_value(100),

@@ -15,9 +15,13 @@ using namespace std;
 void NomadBody::master_termcheck()
 {
 	tbb::tick_count start_time = tbb::tick_count::now();
+	const long long mini_stop_update = static_cast<long long>(8 * mpi_size) * global_num_cols;
 	global_error = numeric_limits<double>::infinity();
 	double diff = numeric_limits<double>::infinity();
-	while(!finished && diff > option->min_error && global_error > option->stop_rmse){
+	while(!finished
+		&& diff > option->min_error // erro condition
+		&& (tm_global_update_count < mini_stop_update || global_error > option->stop_rmse) ) // value condition
+	{
 		std::unique_lock<std::mutex> lk(tm_m);
 		tm_cv.wait(lk);
 		if(finished)
@@ -30,10 +34,11 @@ void NomadBody::master_termcheck()
 		tm_global_update_count = tm_global_update_count_new;
 		double sum = accumulate(tm_local_error_received.begin(), tm_local_error_received.end(), 0.0);
 		double rmse = sqrt(sum / global_num_nonzero);
-		diff = abs(rmse - global_error);
+		diff = rmse - global_error;
 		double time = (tbb::tick_count::now() - start_time).seconds();
-		LOG(INFO) << boost::format("M: termination check at %.2lf: last RMSE: %g, new RMSE: %g, difference: %g, update: %ld")
-			% time % global_error % rmse % diff % tm_global_update_count;
+		LOG(INFO) << boost::format("M: termination check at %.2lf: RMSE: %.12lf, difference: %g, update: %lld")
+			% time % rmse % diff % tm_global_update_count_new;
+		diff = abs(diff);
 		global_error = rmse;
 	}
 	LOG(INFO) << "M: send terimination signal";
