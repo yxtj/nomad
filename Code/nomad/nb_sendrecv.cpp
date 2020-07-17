@@ -39,9 +39,9 @@ void NomadBody::_send_lerror(const double lerror, const long long nupdate)
 {
 	char data[1 + sizeof(double) + sizeof(long long)];
 	*reinterpret_cast<int8_t*>(data) = MsgType::LOCAL_ERROR;
-	*reinterpret_cast<double*>(data + 1) = tm_col_error_sum;
-	*reinterpret_cast<long long*>(data + 1 + sizeof(double)) = local_send_count;
-	//LOG(INFO) << "W" << mpi_rank << "-S: lerror " << tm_col_error_sum << " - " << local_send_count;
+	*reinterpret_cast<double*>(data + 1) = lerror;
+	*reinterpret_cast<long long*>(data + 1 + sizeof(double)) = nupdate;
+	//LOG(INFO) << "W" << mpi_rank << "-S: lerror " << tm_col_error_sum << " - " << nupdate;
 	MPI_Ssend(reinterpret_cast<void*>(&data), sizeof(data), MPI_CHAR, 0, 0, MPI_COMM_WORLD);
 }
 
@@ -51,7 +51,7 @@ void NomadBody::_bcast_dying()
 	*reinterpret_cast<int8_t*>(data) = MsgType::LOCAL_DYING;
 	*reinterpret_cast<int*>(data + 1) = -(mpi_rank + 1);
 	for(int i = 0; i < mpi_size; ++i){
-		LOG(INFO) << "W" << mpi_rank << "-S: dying to " << i;
+		VLOG(1) << "W" << mpi_rank << "-S: dying to " << i;
 		MPI_Ssend(reinterpret_cast<void*>(&data), sizeof(data), MPI_CHAR, i, 0, MPI_COMM_WORLD);
 	}
 }
