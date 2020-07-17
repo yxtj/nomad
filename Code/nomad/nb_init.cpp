@@ -60,7 +60,7 @@ void NomadBody::initial_dataset()
 		{
 			bool succeed = load_test(option->path_, part_index, num_parts, dstest[thread_index]);
 			//min_row_index, local_num_rows, test_col_offset, test_row_idx, test_row_val);
-			Data& d = dstrain[thread_index];
+			Data& d = dstest[thread_index];
 			LOG(INFO) << "Test data part " << part_index << ": "
 				<< "nrows: " << d.num_rows << ", ncols: " << d.num_cols << ", total_nnz: " << d.num_nonzero << ", "
 				<< "min_row: " << d.min_row_index << ", max_row: " << d.min_row_index + d.local_num_rows << ", "
@@ -140,8 +140,10 @@ void NomadBody::initial_termcheck()
 		tm_global_update_count = 0ll;
 	}
 	// worker
-	tm_col_error.assign(global_num_cols, 0.0);
-	tm_col_error_sum = 0.0;
+	double orate = static_cast<double>(global_num_nonzero) / global_num_cols / global_num_rows;
+	double base_error = 2.0 * sqrt(option->latent_dimension_ / orate);
+	tm_col_error.assign(global_num_cols, base_error);
+	tm_col_error_sum = base_error * global_num_cols;
 }
 
 void NomadBody::initial_cp(){
