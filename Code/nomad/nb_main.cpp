@@ -266,7 +266,7 @@ int NomadBody::run(NomadOption* opt){
 				<< "=====================================================\n";
 			buf << "elapsed time: " << (finished ? train_time : option->timeouts_[main_timeout_iter])
 				<< " total training time: " << train_time << " total testing time: " << test_time;
-			buf << "current training RMSE: " << std::fixed << std::setprecision(10)
+			buf << " current training RMSE: " << std::fixed << std::setprecision(10)
 				<< sqrt(global_train_sum_error / global_train_count_error) << "\n";
 			buf << "current test RMSE: " << std::fixed << std::setprecision(10)
 				<< sqrt(global_test_sum_error / global_test_count_error) << "\n";
