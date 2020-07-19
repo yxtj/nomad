@@ -19,7 +19,7 @@ void NomadBody::master_termcheck()
 	global_error = numeric_limits<double>::infinity();
 	double diff = numeric_limits<double>::infinity();
 	while(!finished
-		&& diff > option->min_error // erro condition
+		&& diff > option->min_error // improvement condition
 		&& (tm_global_update_count < mini_stop_update || global_error > option->stop_rmse) ) // value condition
 	{
 		std::unique_lock<std::mutex> lk(tm_m);
