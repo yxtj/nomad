@@ -58,6 +58,35 @@ def parse_name(fn):
         return {'name':m.group(0), 'ds':m.group(1), 'nw':int(m.group(2)),
                 'ci':int(m.group(3)), 'ctype':m.group(4)}
 
+def ds2int(ds):
+    f = 1
+    if ds[-1] in ['k', 'K']:
+        f = 1000
+        ds = ds[:-1]
+    elif ds[-1] in ['m', 'M']:
+        f = 1000*1000
+        ds = ds[:-1]
+    r = int(ds)
+    return r * f
+
+def get_ds(fld, nw=None, ci=None, ctype=None):
+    l = os.listdir(fld)
+    ds_list = []
+    for fn in l:
+        m = parse_name(fn)
+        if m is None:
+            continue
+        if nw is not None and m['nw'] != nw:
+            continue
+        if ci is not None and m['ci'] != ci:
+            continue
+        if ctype is not None and m['ctype'] != ctype:
+            continue
+        if m['ds'] not in ds_list:
+            ds_list.append(m['ds'])
+    ds_list.sort(key=lambda n:ds2int(n))
+    return ds_list
+
 def get_file_list(fld, ds, nw=None, ci=None, ctype=None):
     l = os.listdir(fld)
     fn_list = []
@@ -78,21 +107,6 @@ def get_file_list(fld, ds, nw=None, ci=None, ctype=None):
         fn_list.append(n)
         m_list.append(m)
     return fn_list, m_list
-
-def get_ds(fld, nw=None, ci=None, ctype=None):
-    l = os.listdir(fld)
-    ds_list = []
-    for fn in l:
-        m = parse_name(fn)
-        if nw is not None and m['nw'] != nw:
-            continue
-        if ci is not None and m['ci'] != ci:
-            continue
-        if ctype is not None and m['ctype'] != ctype:
-            continue
-        if m['ds'] not in ds_list:
-            ds_list.append(m['ds'])
-    return ds_list    
 
 def load_files(fld, ds, nw=None, ci=None, ctype=None, th=None):
     dr_list = []
@@ -168,16 +182,14 @@ def get_info_all(dr_list, dc_list, rth):
         res.append(tmp)
     return np.array(res)
 
-HEAD_GROUP=['ds', 'nw', 'ci', 't_none',
-            't_sync', 't_async', 't_vs',
-            'nc_sync', 'nc_async', 'nc_vs',
-            'tc_sync', 'tc_async', 'tc_vs']
+HEADER_GROUP=['ds', 'nw', 'ci', 't_none',
+              't_sync', 't_async', 't_vs',
+              'nc_sync', 'nc_async', 'nc_vs',
+              'tc_sync', 'tc_async', 'tc_vs']
 
 def group_info(fn_list, info_list):
     n = len(fn_list)
     res = {}
-    dsmap = {}
-    dsmap_r = {}
     for i in range(n):
         fn = fn_list[i]
         info = info_list[i]
@@ -186,12 +198,7 @@ def group_info(fn_list, info_list):
         if h in res:
             v = res[h]
         else:
-            if m['ds'] in dsmap:
-                ds = dsmap[m['ds']]
-            else:
-                ds = len(dsmap)
-                dsmap[m['ds']] = ds
-                dsmap_r[ds] = m['ds']
+            ds = ds2int(m['ds'])
             v = [ds, m['nw'], m['ci'], 0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0.0, 0.0, 0.0]
         if m['ctype'] == 'none':
             v[3] = info[0]
@@ -212,30 +219,33 @@ def group_info(fn_list, info_list):
     r = np.array(list(res.values()))
     for i in range(2, -1, -1):
         r = r[r[:,i].argsort(kind='stable')]
-    r = r.tolist()
-    for i in range(len(r)):
-        r[i][0] = dsmap_r[int(r[i][0])]
     return r
 
 def dump_group_table(group_list, out_file, append=False):
     mode = 'a' if append else 'w'
     with open(out_file, mode) as f:
+        if append == False:
+            f.write('\t'.join(HEADER_GROUP))
+            f.write('\n')
         for g in group_list:
-            s = '%s\t%d\t%d' + '\t%f'*4 + '\t%d'*3 + '\t%f'*3 + '\n'
+            s = '%d\t%d\t%d' + '\t%f'*4 + '\t%d'*3 + '\t%f'*3 + '\n'
             f.write(s % tuple(g))
 
 # %% main
 
-def main(ofile. omode, ifld, ds. nw=None, ci=None, th=None):
+def main(ofile, append, ifld, ds, nw=None, ci=None, th=None):
     print('run for data set:', ds)
-    fn_list,m_list,dr_list,dc_list=load_files(ifld, ds,nw, ci, th)
+    fn_list,m_list,dr_list,dc_list=load_files(ifld, ds, nw, ci, None, th)
     rth=get_max_ending_rmse(dr_list)
     print('rmse threshold: ',rth)
+    #get_ending_time_at(dr_list,rth)
     info_list=get_info_all(dr_list, dc_list, rth)
     group=group_info(fn_list, info_list)
     print('number of lines:', len(group))
-    dump_group_table(group, ofile)
+    dump_group_table(group, ofile, append)
 
+#main('table-2.txt', False, 'v2/csv', '10k', th=0.005)
+# %% running
 
 if __name__ == '__main__':
     argc = len(sys.argv)
@@ -255,12 +265,12 @@ if __name__ == '__main__':
         ci = int(sys.argv[6]) if argc > 6 else None
         if ds is None:
             ds_list = get_ds(ifld, nw, ci)
-            omode = 'w'
+            append = False
             for ds in ds_list:
-                main(ofile, omode, ifld, ds, nw, ci, th)
-                omode = 'a'
+                main(ofile, append, ifld, ds, nw, ci, th)
+                append = True
         else:
-            main(ofile, 'w', ifld, ds, nw, ci, th)
+            main(ofile, False, ifld, ds, nw, ci, th)
         print('finish')
         
         
