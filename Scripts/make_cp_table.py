@@ -40,14 +40,14 @@ def load_pair(fld, ds, nw, ci, ctype):
     dc = read_cp_file(fc)
     return dr, dc
 
-def prune_heading(dr, dc, th=0.005):
+def prune_heading(dr, th=0.005):
     n = dr.shape[0]
     if th is None:
         th = np.inf
     p = 0
     while p < n-1 and (dr[p, 1] < dr[p+1, 1] or abs(dr[p, 2] / dr[p, 1]) > th):
         p += 1
-    return dr[p:, :], dc[p:, :]
+    return dr[p:, :]
 
 def parse_name(fn):
     reg = re.compile('''(.+)-(\d+)-(\d+)-(none|sync|async|vs)''')
@@ -116,14 +116,124 @@ def load_files(fld, ds, nw=None, ci=None, ctype=None, th=None):
         dr = read_rmse_file(fld+'/'+fn+'-rmse.csv')
         dc = read_cp_file(fld+'/'+fn+'-cp.csv')
         if th:
-            dr, dc = prune_heading(dr, dc, th)
+            dr = prune_heading(dr, th)
         dr_list.append(dr)
         dc_list.append(dc)
     return fn_list, m_list, dr_list, dc_list
 
 
-# %% data prepare
+# %% data prepare (local tm)
+    
+HEADER_GROUP=['ds', 'nw', 'ci', 't_none',
+              't_sync', 't_async', 't_vs',
+              'nc_sync', 'nc_async', 'nc_vs',
+              'tc_sync', 'tc_async', 'tc_vs']
 
+class Item():
+    def __init__(self, gn, m):
+        self.gn = gn
+        self.size = ds2int(m['ds'])
+        self.nw = int(m['nw'])
+        self.ci = int(m['ci'])
+        self.dr_none = None
+        self.dr_sync = None
+        self.dc_sync = None
+        self.dr_async = None
+        self.dc_async = None
+        self.dr_vs = None
+        self.dc_vs = None
+    
+    def __repr__(self):
+        return self.gn
+    
+    def set_none(self, dr):
+        self.dr_none = dr
+        
+    def set_sync(self, dr, dc):
+        self.dr_sync = dr
+        self.dc_sync = dc
+        
+    def set_async(self, dr, dc):
+        self.dr_async = dr
+        self.dc_async = dc
+    
+    def set_vs(self, dr, dc):
+        self.dr_vs = dr
+        self.dc_vs = dc
+    
+    def __get_ending_rmse__(self):
+        r = 0
+        for dr in [self.dr_none, self.dr_sync, self.dr_async, self.dr_vs]:
+            if dr is not None and dr[-1,1] > r:
+                r = dr[-1,1]
+        return r
+    
+    def __get_time_at_rmse__(self, dr, dc, rth):
+        if dr is None:
+            return 0, 0, 0, 0
+        flag = dr[:,1] > rth
+        p = np.argmin(flag)
+        # flag[p] == False, flag[p-1] == True
+        found = p < dr.shape[0]
+        if not found:
+            return None
+        t = dr[p,0]
+        if dc is not None and dc.size > 0:
+            flag2 = dc[:,0] < t
+            ncp = sum(flag2)
+            tcost = sum(dc[flag2,1])
+        else:
+            ncp = 0
+            tcost = 0.0
+        return t, dr[p, 1], ncp, tcost
+    
+    def get_info(self):
+        rth = self.__get_ending_rmse__()
+        v = self.__get_time_at_rmse__(self.dr_none, None, rth)
+        info = np.zeros(4+3*3)
+        info[:4] = [self.size, self.nw, self.ci, v[0]]
+        idx = np.array([4,7,10])
+        dr_list = [self.dr_sync, self.dr_async, self.dr_vs]
+        dc_list = [self.dc_sync, self.dc_async, self.dc_vs]
+        for i in range(3):
+            v = self.__get_time_at_rmse__(dr_list[i], dc_list[i], rth)
+            info[idx + i] = [v[0], v[2], v[3]]
+        return info
+    
+    
+def group_lists(fn_list, m_list, dr_list, dc_list):
+    n = len(fn_list)
+    res = {}
+    for i in range(n):
+        m = m_list[i]
+        gn = '%s-%d-%d' % (m['ds'], m['nw'], m['ci'])
+        if gn in res:
+            v = res[gn]
+        else:
+            v = Item(gn, m)
+        if m['ctype'] == 'none':
+            v.set_none(dr_list[i])
+        elif m['ctype'] == 'sync':
+            v.set_sync(dr_list[i], dc_list[i])
+        elif m['ctype'] == 'async':
+            v.set_async(dr_list[i], dc_list[i])
+        elif m['ctype'] == 'vs':
+            v.set_vs(dr_list[i], dc_list[i])
+        res[gn] = v
+    # sort
+    r = np.arange(len(res))
+    r = list(res.values())
+    r = sorted(r, key=lambda d:d.ci)
+    r = sorted(r, key=lambda d:d.nw)
+    r = sorted(r, key=lambda d:d.size)
+    return r
+
+def item2table(item_list):
+    res = np.vstack([item.get_info() for item in item_list])
+    return res
+    
+# %% data prepare (global tm)
+    
 def cut_list_by_dataset(m_list, data_list):
     assert len(m_list) == len(data_list)
     res = []
@@ -187,7 +297,7 @@ HEADER_GROUP=['ds', 'nw', 'ci', 't_none',
               'nc_sync', 'nc_async', 'nc_vs',
               'tc_sync', 'tc_async', 'tc_vs']
 
-def group_info(fn_list, info_list):
+def group_info_to_table(fn_list, info_list):
     n = len(fn_list)
     res = {}
     for i in range(n):
@@ -221,6 +331,9 @@ def group_info(fn_list, info_list):
         r = r[r[:,i].argsort(kind='stable')]
     return r
 
+
+# %% main
+
 def dump_group_table(group_list, out_file, append=False):
     mode = 'a' if append else 'w'
     with open(out_file, mode) as f:
@@ -230,28 +343,30 @@ def dump_group_table(group_list, out_file, append=False):
         for g in group_list:
             s = '%d\t%d\t%d' + '\t%f'*4 + '\t%d'*3 + '\t%f'*3 + '\n'
             f.write(s % tuple(g))
-
-# %% main
-
-def main(ofile, append, ifld, ds, nw=None, ci=None, th=None):
+    
+def main(ofile, append, gp_tm, ifld, ds, nw=None, ci=None, th=None):
     print('run for data set:', ds)
     fn_list,m_list,dr_list,dc_list=load_files(ifld, ds, nw, ci, None, th)
-    rth=get_max_ending_rmse(dr_list)
-    print('rmse threshold: ',rth)
-    #get_ending_time_at(dr_list,rth)
-    info_list=get_info_all(dr_list, dc_list, rth)
-    group=group_info(fn_list, info_list)
+    if gp_tm:
+        item_list=group_lists(fn_list,m_list,dr_list,dc_list)
+        group=item2table(item_list)
+    else:
+        rth=get_max_ending_rmse(dr_list, gp_tm)
+        print('rmse threshold: ',rth)
+        #get_ending_time_at(dr_list,rth)
+        info_list=get_info_all(dr_list, dc_list, rth)
+        group=group_info_to_table(fn_list, info_list)
     print('number of lines:', len(group))
     dump_group_table(group, ofile, append)
-
-#main('table-2.txt', False, 'v2/csv', '10k', th=0.005)
+    
 # %% running
 
 if __name__ == '__main__':
     argc = len(sys.argv)
     if argc <= 2:
         print('Make table from csv files.')
-        print('usage: <in-folder> <out-file> [th] [ds] [nw] [ci]')
+        print('usage: <in-folder> <out-file> [group-term] [th] [ds] [nw] [ci]')
+        print('  [group-term]: (=False) find the terminination time for each group, instead of globally')
         print('  [th]: (=0.005) threashold for pruning the head of data')
         print('  [ds]: (=None) data set name, filter option')
         print('  [nw]: (=None) number of workers, filter option')
@@ -259,18 +374,19 @@ if __name__ == '__main__':
     else:
         ifld = sys.argv[1]
         ofile = sys.argv[2]
-        th = float(sys.argv[3]) if argc > 3 else 0.005
-        ds = sys.argv[4] if argc > 4 else None
-        nw = int(sys.argv[5]) if argc > 5 else None
-        ci = int(sys.argv[6]) if argc > 6 else None
+        gp_tm = re.match('''1|y|yes|t|true''',sys.argv[3],re.IGNORECASE) if argc > 3 else False
+        th = float(sys.argv[4]) if argc > 4 else 0.005
+        ds = sys.argv[5] if argc > 5 else None
+        nw = int(sys.argv[6]) if argc > 6 else None
+        ci = int(sys.argv[7]) if argc > 7 else None
         if ds is None:
             ds_list = get_ds(ifld, nw, ci)
             append = False
             for ds in ds_list:
-                main(ofile, append, ifld, ds, nw, ci, th)
+                main(ofile, append, gp_tm, ifld, ds, nw, ci, th)
                 append = True
         else:
-            main(ofile, False, ifld, ds, nw, ci, th)
+            main(ofile, False, gp_tm, ifld, ds, nw, ci, th)
         print('finish')
         
         
