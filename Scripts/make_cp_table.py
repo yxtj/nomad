@@ -44,10 +44,13 @@ def prune_heading(dr, th=0.005):
     n = dr.shape[0]
     if th is None:
         th = np.inf
-    p = 0
-    while p < n-1 and (dr[p, 1] < dr[p+1, 1] or abs(dr[p, 2] / dr[p, 1]) > th):
-        p += 1
-    return dr[p:, :]
+    flag1 = dr[:,2] > 0
+    flag2 = dr[:,2]/dr[:,1] > th
+    flag = np.logical_or(flag1, flag2)
+    p = flag.nonzero()[0]
+    if p.size == 0:
+        return dr
+    return dr[p[-1]:]
 
 def parse_name(fn):
     reg = re.compile('''(.+)-(\d+)-(\d+)-(none|sync|async|vs)''')
