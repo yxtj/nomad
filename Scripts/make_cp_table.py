@@ -351,7 +351,7 @@ def main(ofile, append, gp_tm, ifld, ds, nw=None, ci=None, th=None):
         item_list=group_lists(fn_list,m_list,dr_list,dc_list)
         group=item2table(item_list)
     else:
-        rth=get_max_ending_rmse(dr_list, gp_tm)
+        rth=get_max_ending_rmse(dr_list)
         print('rmse threshold: ',rth)
         #get_ending_time_at(dr_list,rth)
         info_list=get_info_all(dr_list, dc_list, rth)
