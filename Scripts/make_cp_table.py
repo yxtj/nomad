@@ -190,8 +190,10 @@ class Item():
             tcost = 0.0
         return t, dr[p, 1], ncp, tcost
     
-    def get_info(self):
-        rth = self.__get_ending_rmse__()
+    def get_info(self, rth=None):
+        if rth is None:
+            rth = self.__get_ending_rmse__()
+            print('  rmse threshold of %s is %f' % (self.gn, rth))
         v = self.__get_time_at_rmse__(self.dr_none, None, rth)
         info = np.zeros(4+3*3)
         info[:4] = [self.size, self.nw, self.ci, v[0]]
@@ -336,6 +338,10 @@ def group_info_to_table(fn_list, info_list):
 
 
 # %% main
+    
+def format_one_row(line):
+    s = '%d\t%d\t%d' + '\t%.2f'*4 + '\t%d'*3 + '\t%f'*3 + '\n'
+    return s % tuple(line)
 
 def dump_group_table(group_list, out_file, append=False):
     mode = 'a' if append else 'w'
@@ -344,17 +350,20 @@ def dump_group_table(group_list, out_file, append=False):
             f.write('\t'.join(HEADER_GROUP))
             f.write('\n')
         for g in group_list:
-            s = '%d\t%d\t%d' + '\t%f'*4 + '\t%d'*3 + '\t%f'*3 + '\n'
-            f.write(s % tuple(g))
+            line = format_one_row(g)
+            f.write(line)
     
-def main(ofile, append, gp_tm, ifld, ds, nw=None, ci=None, th=None):
+def main(ofile, append, method, ifld, ds, nw=None, ci=None, th=None):
     print('run for data set:', ds)
     fn_list,m_list,dr_list,dc_list=load_files(ifld, ds, nw, ci, None, th)
-    if gp_tm:
+    if method == 'group':
         item_list=group_lists(fn_list,m_list,dr_list,dc_list)
         group=item2table(item_list)
     else:
-        rth=get_max_ending_rmse(dr_list)
+        if method == 'global':
+            rth=get_max_ending_rmse(dr_list)
+        else:
+            rth=float(method)
         print('rmse threshold: ',rth)
         #get_ending_time_at(dr_list,rth)
         info_list=get_info_all(dr_list, dc_list, rth)
@@ -368,8 +377,10 @@ if __name__ == '__main__':
     argc = len(sys.argv)
     if argc <= 2:
         print('Make table from csv files.')
-        print('usage: <in-folder> <out-file> [group-term] [th] [ds] [nw] [ci]')
-        print('  [group-term]: (=False) find the terminination time for each group, instead of globally')
+        print('usage: <in-folder> <out-file> [rmse-mthd] [th] [ds] [nw] [ci]')
+        print('  [rmse-mthd]: (=global) method to find the terminination time.' +
+              ' Support: "global", "group", a float number.' +
+              ' For global/group automatically finding, given RMSE value.')
         print('  [th]: (=0.005) threashold for pruning the head of data')
         print('  [ds]: (=None) data set name, filter option')
         print('  [nw]: (=None) number of workers, filter option')
@@ -377,7 +388,8 @@ if __name__ == '__main__':
     else:
         ifld = sys.argv[1]
         ofile = sys.argv[2]
-        gp_tm = re.match('''1|y|yes|t|true''',sys.argv[3],re.IGNORECASE) if argc > 3 else False
+        m = re.match('''^(global|group|\d+(?:\.\d*)?)$''',sys.argv[3], re.IGNORECASE)
+        method = m[0] if argc > 3 else 'global'
         th = float(sys.argv[4]) if argc > 4 else 0.005
         ds = sys.argv[5] if argc > 5 else None
         nw = int(sys.argv[6]) if argc > 6 else None
@@ -386,10 +398,10 @@ if __name__ == '__main__':
             ds_list = get_ds(ifld, nw, ci)
             append = False
             for ds in ds_list:
-                main(ofile, append, gp_tm, ifld, ds, nw, ci, th)
+                main(ofile, append, method, ifld, ds, nw, ci, th)
                 append = True
         else:
-            main(ofile, False, gp_tm, ifld, ds, nw, ci, th)
+            main(ofile, False, method, ifld, ds, nw, ci, th)
         print('finish')
         
         
