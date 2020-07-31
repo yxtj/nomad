@@ -191,6 +191,7 @@ def drawOverheadGroup(data, relative=False, xlbl=None, xticks=None,
     plt.tight_layout()
 
 def drawScaleWorker(data, overhead=True, average=True,
+                    ref=False, fit=False,
                     logx=False, logy=False, ncol=1, loc=None):
     x = data[:,1]
     idx = np.array([4,6,5])
@@ -203,10 +204,24 @@ def drawScaleWorker(data, overhead=True, average=True,
         y = data[:,[3,4,5,6]]
     plt.figure()
     plt.plot(x, y)
+    if overhead:
+        if ref:
+            plt.gca().set_prop_cycle(None) # reset color rotation
+            r = y[0] * x[0] / x.reshape(-1,1)
+            plt.plot(x, r, linestyle='-.')
+        if fit:
+            plt.gca().set_prop_cycle(None) # reset color rotation
+            lx = np.log(x)
+            ly = np.log(y)
+            for i in range(y.shape[1]):
+                a,b = np.polyfit(lx, ly[:,i], 1)
+                plt.plot(x, np.exp(a*lx + b), linestyle='--')
     if logx:
         plt.xscale('log')
     if logy:
         plt.yscale('log')
+    else:
+        plt.ylim(0.0, None)
     plt.xlabel('number of worker')
     if overhead:
         ylbl = 'average overhead (s)' if average else 'overhead time (s)'
@@ -214,13 +229,17 @@ def drawScaleWorker(data, overhead=True, average=True,
     else:
         ylbl = 'running time (s)'
         lgd = ['None', 'Sync','FAIC','Async']
+    plt.xticks(x, x.astype('int'))
     plt.ylabel(ylbl)
     plt.legend(lgd, ncol=ncol, loc=loc)
     plt.tight_layout()
+
 
 # %% main
 
 def main():
     data=np.loadtxt('../log/table-2.txt',delimiter='\t',skiprows=1)
-    data1=select(data, '10k')
+    drawOverhead(data)
+    drawOverheadGroup(data)
+    drawScaleWorker(data, logx=True, logy=True, ref=True)
     
