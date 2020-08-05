@@ -8,14 +8,15 @@ Created on Fri Jul 31 04:36:32 2020
 import numpy as np
 import matplotlib.pyplot as plt
 
-def set_small_figure():
+def set_small_figure(fontsize=12):
     plt.rcParams["figure.figsize"] = [4,3]
-    plt.rcParams["font.size"]=12
+    plt.rcParams["font.size"] = fontsize
 
 
-def set_large_figure():
+def set_large_figure(fontsize=16):
     plt.rcParams["figure.figsize"] = [6,4.5]
-    plt.rcParams["font.size"] = 16
+    plt.rcParams["font.size"] = fontsize
+
 
 # %% data generate/simulate
 
@@ -104,7 +105,7 @@ def drawRecover(data, err=None, xticks=True,
         xticks = ['%.0f%%' % (v*100) for v in fp]
         plt.xticks(x, xticks)
     plt.xlabel('failure point (progress percentage)')
-    plt.ylabel('time (s)')
+    plt.ylabel('running time (s)')
     plt.legend(['FAIC', 'Restart'], ncol=ncol, loc=loc)
     plt.tight_layout()
 
