@@ -67,33 +67,34 @@ int NomadBody::run(NomadOption* opt){
 	/////////////////////////////////////////////////////////
 	// Initialize Columns
 	/////////////////////////////////////////////////////////
+	if(option->recover_epoch < 0){
+		mt19937_64 rng(option->seed_ + mpi_rank * 131 + 139);
+		std::uniform_real_distribution<double> init_dist(0, 1.0 / sqrt(option->latent_dimension_));
 
-	mt19937_64 rng(option->seed_ + mpi_rank * 131 + 139);
-	std::uniform_real_distribution<double> init_dist(0, 1.0 / sqrt(option->latent_dimension_));
+		int columns_per_machine = global_num_cols / mpi_size + ((global_num_cols % mpi_size > 0) ? 1 : 0);
+		int col_start = columns_per_machine * mpi_rank;
+		int col_end = std::min(columns_per_machine * (mpi_rank + 1), global_num_cols);
 
-	int columns_per_machine = global_num_cols / mpi_size + ((global_num_cols % mpi_size > 0) ? 1 : 0);
-	int col_start = columns_per_machine * mpi_rank;
-	int col_end = std::min(columns_per_machine * (mpi_rank + 1), global_num_cols);
+		// create additional RNG, to make it identical to other programs
+		mt19937_64 rng_temp(option->seed_ + mpi_rank + 137);
 
-	// create additional RNG, to make it identical to other programs
-	mt19937_64 rng_temp(option->seed_ + mpi_rank + 137);
+		// generate columns
+		for(int i = col_start; i < col_end; i++){
+			// create a column
+			ColumnData* p_col = column_pool->pop();
+			p_col->col_index_ = i;
+			p_col->flag_ = 0;
+			// create initial permutation for the column
+			p_col->set_perm(option->num_threads_, rng_temp);
 
-	// generate columns
-	for(int i = col_start; i < col_end; i++){
-		// create a column
-		ColumnData* p_col = column_pool->pop();
-		p_col->col_index_ = i;
-		p_col->flag_ = 0;
-		// create initial permutation for the column
-		p_col->set_perm(option->num_threads_, rng_temp);
+			// initialize parameter
+			for(int j = 0; j < option->latent_dimension_; j++){
+				p_col->values_[j] = init_dist(rng);
+			}
 
-		// initialize parameter
-		for(int j = 0; j < option->latent_dimension_; j++){
-			p_col->values_[j] = init_dist(rng);
+			// push to the job queue
+			job_queues[p_col->perm_[p_col->pos_]].push(p_col);
 		}
-
-		// push to the job queue
-		job_queues[p_col->perm_[p_col->pos_]].push(p_col);
 	}
 
 	if(mpi_rank == 0){
@@ -251,9 +252,11 @@ int NomadBody::run(NomadOption* opt){
 		double machine_cp_time_write = std::accumulate(cp_time_write.begin(), cp_time_write.end(), 0.0);
 		double global_cp_time_write = 0.0;
 		double global_cp_time_total = 0.0;
+		vector<long long> global_cp_stat_msg_num(cp_epoch + 1, 0ll);
 		if(option->cp_type_ != "none"){
 			MPI_Allreduce(&machine_cp_time_write, &global_cp_time_write, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 			MPI_Allreduce(&cp_time_total_worker, &global_cp_time_total, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+			MPI_Allreduce(cp_stat_msg_num.data(), global_cp_stat_msg_num.data(), cp_epoch + 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
 		}
 
 		MPI_Barrier(MPI_COMM_WORLD);
@@ -288,6 +291,10 @@ int NomadBody::run(NomadOption* opt){
 				buf << "Total checkpoint writing time: " << global_cp_time_write
 					<< " each one: " << global_cp_time_write / cp_master_epoch
 					<< " average on worker: " << global_cp_time_write / cp_master_epoch / mpi_size << "\n";
+				buf << "Number of archived message in each checkpoint:";
+				for(int i = 0; i <= cp_epoch; ++i)
+					buf << " " << global_cp_stat_msg_num[i];
+				buf << "\n";
 			}
 			buf << "=====================================================";
 			LOG(INFO) << buf.str();
@@ -418,8 +425,16 @@ void NomadBody::updater_func(int thread_index){
 	vector<int, sallocator<int> >& train_row_idx = dstrain[thread_index].row_idx;
 	vector<double, sallocator<double> >& train_row_val = dstrain[thread_index].row_val;
 
+	// set & copy some essential parameters explicitly
 	int local_num_rows = dstrain[thread_index].local_num_rows;
 	int min_row_index = dstrain[thread_index].min_row_index;
+
+	const int dim = option->latent_dimension_;
+	const double learn_rate = option->learn_rate_;
+	const double decay_rate = option->decay_rate_;
+	const double par_lambda = option->par_lambda_;
+	const int num_threads = option->num_threads_;
+	const int num_reuse = option->num_reuse_;
 
 	/////////////////////////////////////////////////////////
 	// Initialize Latent Data Structure
@@ -428,24 +443,20 @@ void NomadBody::updater_func(int thread_index){
 	// now assign parameters for rows
 	double* latent_rows = sallocator<double>().allocate(local_num_rows * (option->latent_dimension_));
 
-	// initialize random number generator
-	mt19937_64 rng(option->seed_ + mpi_rank * 131 + thread_index + 1);
-	std::uniform_real_distribution<double> init_dist(0, 1.0 / sqrt(option->latent_dimension_));
-	for(int i = 0; i < local_num_rows * option->latent_dimension_; i++){
-		latent_rows[i] = init_dist(rng);
+	if(option->recover_epoch >= 0){
+		// load checkpoint
+		restore(option->recover_epoch, thread_index, latent_rows, local_num_rows, option->latent_dimension_);
+	} else {
+		// initialize random number generator
+		mt19937_64 rng(option->seed_ + mpi_rank * 131 + thread_index + 1);
+		std::uniform_real_distribution<double> init_dist(0, 1.0 / sqrt(option->latent_dimension_));
+		for(int i = 0; i < local_num_rows * option->latent_dimension_; i++){
+			latent_rows[i] = init_dist(rng);
+		}
 	}
 
 	int* col_update_counts = sallocator<int>().allocate(global_num_cols);
 	std::fill_n(col_update_counts, global_num_cols, 0);
-
-	// copy some essential parameters explicitly
-
-	const int dim = option->latent_dimension_;
-	const double learn_rate = option->learn_rate_;
-	const double decay_rate = option->decay_rate_;
-	const double par_lambda = option->par_lambda_;
-	const int num_threads = option->num_threads_;
-	const int num_reuse = option->num_reuse_;
 
 	long long local_num_updates = 0;
 	long long local_num_failures = 0;

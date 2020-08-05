@@ -69,6 +69,7 @@ void NomadBody::_archive_msg_queue(int thread_index, const string& suffix, colqu
 		for(auto it = queue.unsafe_begin(); it != queue.unsafe_end(); ++it){
 			(*it)->serialize(buffer, option->latent_dimension_);
 			fout.write(buffer, unit_bytenum);
+			++cp_stat_msg_num[cp_epoch];
 		}
 		fout.close();
 	}else{
@@ -76,6 +77,7 @@ void NomadBody::_archive_msg_queue(int thread_index, const string& suffix, colqu
 		while(queue.try_pop(p_col)){
 			p_col->serialize(buffer, option->latent_dimension_);
 			fout.write(buffer, unit_bytenum);
+			++cp_stat_msg_num[cp_epoch];
 			temp.push(p_col);
 		}
 		fout.close();
@@ -105,7 +107,7 @@ void NomadBody::archive_msg(int thread_index, ColumnData* p_col){
 	p_col->serialize(buffer, option->latent_dimension_);
 	cp_fmsgs[thread_index]->write(buffer, unit_bytenum);
 	cp_time_write[thread_index] += (tbb::tick_count::now() - t0).seconds();
-	//++msg_archived[thread_index];
+	++cp_stat_msg_num[cp_epoch];
 	delete[] buffer;
 }
 
@@ -135,10 +137,9 @@ void NomadBody::restore(int epoch, int thread_index, double* latent_rows, int& l
 	int part_index = mpi_rank * option->num_threads_ + thread_index;
 	string cp_f = gen_cp_file_name(part_index);
 	restore_local(cp_f + ".state", part_index, latent_rows, local_num_rows, dim);
-	for(int thread_index = 0; thread_index < option->num_threads_; ++thread_index){
-		restore_msg_queue(cp_f + ".msg", job_queues[thread_index]);
-	}
-	restore_msg_queue(cp_f + ".smsg", send_queue);
+	restore_msg_queue(cp_f + ".msg", job_queues[thread_index]);
+	if(thread_index == 0)
+		restore_msg_queue(cp_f + ".smsg", send_queue);
 }
 
 /////////////////////////////////////////////////////////
@@ -198,6 +199,8 @@ void NomadBody::cp_shm_start(int epoch)
 	VLOG(1) << "W" << mpi_rank << " m start";
 	cp_time_total_timer = tbb::tick_count::now();
 	cp_epoch = epoch;
+	while(cp_epoch >= cp_stat_msg_num.size())
+		cp_stat_msg_num.push_back(0ll);
 	checkpointing = true;
 	if(option->cp_type_ == "sync"){
 		allow_sending = false;

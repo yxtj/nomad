@@ -52,10 +52,13 @@ bool NomadOption::parse_command(int& argc, char**& argv) {
 			"send columns to random a worker")
 		("r0delay", value<double>(&rank0_delay_)->default_value(0),
 			"arbitrary network delay added to communication of rank 0 machine")
+
 		("input,i", value<string>(&path_), "path of data")
 		("output,o", value<string>(&output_path_)->default_value(""),
 			"path of the file the result will be printed into")
 
+		("recover", value<int>(&recover_epoch)->default_value(-1),
+			"recover from which epoch (-1 means do not recover)")
 		("jobid,j", value<int>(&job_id_)->default_value(1),
 			"numberic ID of current job, used to distinguish different job's internal files.")
 		("cptype,c", value<string>(&cp_type_)->default_value("none"),

@@ -141,12 +141,12 @@ private:
 	//vector<vector<bool>, callocator<vector<bool> > > received_flush;
 	int cp_epoch;
 
-	vector<long long, callocator<long long> > msg_archived;
 	vector<double, callocator<double> > cp_time_write;
 	double cp_time_total_worker;
 	tbb::tick_count cp_time_total_timer;
 	double cp_time_total_master;
 	vector<std::ofstream*> cp_fmsgs;
+	vector<long long> cp_stat_msg_num; // maintain a 0 at the end.
 
 	// master - checkpoint
 	int cp_master_epoch;

@@ -31,6 +31,7 @@ struct NomadOption {
 	std::string path_;
 	std::string output_path_;
 
+	int recover_epoch;
 	int job_id_;
 	std::string cp_type_;
 	double cp_interval_;
